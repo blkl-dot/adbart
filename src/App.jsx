@@ -1,18 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { supabase } from "./supabase";
 
-// ════════════════════════════════════════════════════
-// ⬇️ TON COMPTE DE CONNEXION (modifiable) ⬇️
-// ════════════════════════════════════════════════════
-const COMPTE_DEMO = {
-  email: "zachary@adbarth.fr",
-  pass: "adbarth2026",
-  name: "Zachary",
-  resto: "Chez Barth",
-  phone: "+33 6 00 11 22 33",
-};
-// ════════════════════════════════════════════════════
-
 // ── Couleurs ──────────────────────────────────────────────────────────
 const R = "#FF6B35";
 const OR = "#F5A623";
@@ -26,15 +14,19 @@ const PLANS = [
   { key:"premium", name:"Premium", price:99, features:["SMS automatique appel manqué","Chatbot commande + réservation","SMS illimités","Dashboard cuisine temps réel","Réservations en ligne","Support prioritaire 7j/7"], missing:[] },
 ];
 
-// ── Base de données Supabase (persistante) ─
+// ── Base de données Supabase (liée au compte connecté) ─
 let _orders = [];
 let _subs = [];
+let _userId = null;
 const notify = () => _subs.forEach(f => f([..._orders]));
+export const setUserId = id => { _userId = id; };
 
 async function loadOrders() {
+  if (!_userId) { _orders = []; notify(); return; }
   const { data, error } = await supabase
     .from("commandes")
     .select("*")
+    .eq("compte_id", _userId)
     .order("cree_le", { ascending: false });
   if (!error && data) {
     _orders = data.map(d => ({
@@ -53,29 +45,22 @@ async function loadOrders() {
 }
 
 const db = {
-  sub: fn => {
-    _subs.push(fn);
-    loadOrders();
-    return () => { _subs = _subs.filter(s => s !== fn); };
-  },
+  sub: fn => { _subs.push(fn); loadOrders(); return () => { _subs = _subs.filter(s => s !== fn); }; },
+  reload: () => loadOrders(),
   add: async o => {
     _orders = [o, ..._orders];
     notify();
     await supabase.from("commandes").insert({
-      ref: o.id,
-      type: o.type,
-      client: o.client,
-      items: o.items,
-      total: o.total,
-      note: o.note || "",
-      status: o.status,
+      compte_id: _userId,
+      ref: o.id, type: o.type, client: o.client,
+      items: o.items, total: o.total, note: o.note || "", status: o.status,
     });
     loadOrders();
   },
   upd: async (id, s) => {
     _orders = _orders.map(o => o.id === id ? { ...o, status: s } : o);
     notify();
-    await supabase.from("commandes").update({ status: s }).eq("ref", id);
+    await supabase.from("commandes").update({ status: s }).eq("ref", id).eq("compte_id", _userId);
   },
 };
 const uid = () => String(Date.now()).slice(-4);
@@ -103,44 +88,56 @@ button { font-family: 'DM Sans', sans-serif; }
 const I = { width: "100%", background: "#0E0F17", border: "1.5px solid #252836", borderRadius: 11, color: "#E8EAF0", fontSize: 14, padding: "12px 14px", fontFamily: "'DM Sans', sans-serif" };
 
 // ═════════════════════════════════════════════════════════════════════
-// ROOT — routeur
+// ROOT — routeur + gestion de session Supabase
 // ═════════════════════════════════════════════════════════════════════
 export default function AdBarth() {
   const [page, setPage] = useState("login");
   const [plan, setPlan] = useState(null);
   const [user, setUser] = useState(null);
   const [orders, setOrders] = useState([]);
+  const [ready, setReady] = useState(false);
+
   useEffect(() => db.sub(setOrders), []);
 
-  // Au chargement : si déjà connecté précédemment, va direct à l'admin
+  // Vérifie la session au chargement + écoute les changements
   useEffect(() => {
-    const saved = window.name && window.name.startsWith("ADBARTH_USER:")
-      ? JSON.parse(window.name.slice("ADBARTH_USER:".length))
-      : null;
-    if (saved) { setUser(saved); setPage("admin"); }
+    supabase.auth.getSession().then(({ data }) => {
+      if (data?.session?.user) applySession(data.session.user);
+      setReady(true);
+    });
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
+      if (session?.user) applySession(session.user);
+      else { setUserId(null); setUser(null); db.reload(); }
+    });
+    return () => sub?.subscription?.unsubscribe();
   }, []);
 
-  const login = u => {
+  async function applySession(authUser) {
+    setUserId(authUser.id);
+    const { data } = await supabase.from("comptes").select("*").eq("id", authUser.id).single();
+    const u = {
+      email: authUser.email,
+      name: data?.nom || authUser.user_metadata?.nom || "",
+      resto: data?.resto || authUser.user_metadata?.resto || "Mon restaurant",
+      phone: data?.telephone || authUser.user_metadata?.telephone || "",
+    };
     setUser(u);
-    window.name = "ADBARTH_USER:" + JSON.stringify(u); // mémorise la session
+    db.reload();
     setPage("admin");
-  };
-  const logout = () => {
-    setUser(null);
-    window.name = "";
-    setPage("login");
-  };
+  }
 
+  const logout = async () => { await supabase.auth.signOut(); setUser(null); setUserId(null); setPage("login"); };
   const go = p => { setPage(p); window.scrollTo(0, 0); };
+
+  if (!ready) return <><style>{CSS}</style><div style={{ minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", background:"#09090F" }}><Spinner /></div></>;
+
   return (
     <><style>{CSS}</style>
     <div style={{ minHeight:"100vh", background:"#09090F", color:"#E8EAF0", fontFamily:"'DM Sans',sans-serif" }}>
-      {page === "login" && <Login onLogin={login} go={go} />}
+      {page === "login" && <Login go={go} onLogged={applySession} />}
       {page === "landing" && <Landing go={go} />}
       {page === "pricing" && <Pricing go={go} onPick={p => { setPlan(p); go("signup"); }} />}
-      {page === "signup" && <Signup go={go} plan={plan} onNext={u => { setUser(u); go("payment"); }} />}
-      {page === "payment" && <Payment go={go} plan={plan} user={user} onOk={() => go("success")} />}
-      {page === "success" && <Success user={user} onEnter={() => go("admin")} />}
+      {page === "signup" && <Signup go={go} plan={plan} onLogged={applySession} />}
       {page === "admin" && <Admin user={user} go={go} onLogout={logout} />}
       {page === "simulator" && <Simulator go={go} user={user} />}
       {page === "chatbot" && <Chatbot go={go} user={user} />}
@@ -150,19 +147,20 @@ export default function AdBarth() {
 }
 
 // ═════════════════════════════════════════════════════════════════════
-// LOGIN — page de connexion
+// LOGIN — connexion Supabase
 // ═════════════════════════════════════════════════════════════════════
-function Login({ onLogin, go }) {
+function Login({ go, onLogged }) {
   const [email, setEmail] = useState("");
   const [pass, setPass] = useState("");
   const [err, setErr] = useState("");
-  function submit(e) {
+  const [loading, setLoading] = useState(false);
+  async function submit(e) {
     e.preventDefault();
-    if (email.trim().toLowerCase() === COMPTE_DEMO.email.toLowerCase() && pass === COMPTE_DEMO.pass) {
-      onLogin({ name: COMPTE_DEMO.name, resto: COMPTE_DEMO.resto, phone: COMPTE_DEMO.phone, email: COMPTE_DEMO.email });
-    } else {
-      setErr("Email ou mot de passe incorrect.");
-    }
+    setErr(""); setLoading(true);
+    const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password: pass });
+    setLoading(false);
+    if (error) { setErr("Email ou mot de passe incorrect."); return; }
+    if (data?.user) onLogged(data.user);
   }
   return (
     <div style={{ minHeight:"100vh", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:24 }}>
@@ -174,11 +172,14 @@ function Login({ onLogin, go }) {
           <Field l="Email"><input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="vous@restaurant.fr" style={I} /></Field>
           <Field l="Mot de passe"><input type="password" value={pass} onChange={e => setPass(e.target.value)} placeholder="••••••••" style={I} /></Field>
           {err && <div style={{ color:"#EF4444", fontSize:13, textAlign:"center" }}>{err}</div>}
-          <PrimaryBtn lg full type="submit" style={{ marginTop:4 }}>Se connecter →</PrimaryBtn>
+          <button type="submit" disabled={loading} style={{ padding:"15px", borderRadius:12, background: loading ? "#252836" : R, color:"#fff", border:"none", fontWeight:800, fontSize:15, cursor: loading ? "not-allowed" : "pointer", marginTop:4, display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}>
+            {loading ? <><Spinner /> Connexion…</> : "Se connecter →"}
+          </button>
         </form>
         <div style={{ borderTop:"1px solid #181824", marginTop:22, paddingTop:18, textAlign:"center" }}>
           <p style={{ fontSize:13, color:"#6B7280" }}>Pas encore de compte ?</p>
-          <span onClick={() => go("landing")} style={{ fontSize:13, color:R, fontWeight:700, cursor:"pointer" }}>Découvrir AdBarth →</span>
+          <span onClick={() => go("pricing")} style={{ fontSize:13, color:R, fontWeight:700, cursor:"pointer" }}>Créer un compte →</span>
+          <span onClick={() => go("landing")} style={{ display:"block", marginTop:8, fontSize:12, color:"#555B6E", cursor:"pointer" }}>Découvrir AdBarth</span>
         </div>
       </div>
     </div>
@@ -366,7 +367,7 @@ function Landing({ go }) {
 function Pricing({ go, onPick }) {
   return (
     <div style={{ minHeight:"100vh", paddingBottom:60 }}>
-      <StepNav title="Choisissez votre plan" onBack={() => go("landing")} step={1} of={3} />
+      <StepNav title="Choisissez votre plan" onBack={() => go("login")} step={1} of={2} />
       <div style={{ padding:"40px 20px", maxWidth:960, margin:"0 auto" }}>
         <div style={{ textAlign:"center", marginBottom:48 }}>
           <h2 style={{ fontFamily:"'Syne',sans-serif", fontSize:"clamp(22px,3.5vw,40px)", fontWeight:900, letterSpacing:"-1px", marginBottom:12 }}>Simple. Transparent. Sans surprise.</h2>
@@ -409,128 +410,60 @@ function Pricing({ go, onPick }) {
 }
 
 // ═════════════════════════════════════════════════════════════════════
-// SIGNUP
+// SIGNUP — inscription Supabase
 // ═════════════════════════════════════════════════════════════════════
-function Signup({ go, plan, onNext }) {
+function Signup({ go, plan, onLogged }) {
   const [f, setF] = useState({ name:"", email:"", phone:"", resto:"", pass:"", pass2:"" });
   const [err, setErr] = useState("");
-  function submit(e) {
+  const [loading, setLoading] = useState(false);
+  async function submit(e) {
     e.preventDefault();
     if (!f.name || !f.email || !f.resto || !f.pass) { setErr("Remplissez tous les champs obligatoires."); return; }
     if (f.pass !== f.pass2) { setErr("Les mots de passe ne correspondent pas."); return; }
     if (f.pass.length < 6) { setErr("Mot de passe trop court (6 caractères minimum)."); return; }
     const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.email);
     if (!emailOk) { setErr("Adresse email invalide."); return; }
-    onNext(f);
+    setErr(""); setLoading(true);
+    const { data, error } = await supabase.auth.signUp({
+      email: f.email.trim(),
+      password: f.pass,
+      options: { data: { nom: f.name, resto: f.resto, telephone: f.phone } },
+    });
+    setLoading(false);
+    if (error) { setErr(error.message || "Erreur lors de l'inscription."); return; }
+    if (data?.user) {
+      if (data.session) { onLogged(data.user); }
+      else { setErr("Compte créé ! Vérifiez votre email pour confirmer, puis connectez-vous."); }
+    }
   }
   return (
     <div style={{ minHeight:"100vh", paddingBottom:60 }}>
-      <StepNav title="Créer votre compte" onBack={() => go("pricing")} step={2} of={3} />
+      <StepNav title="Créer votre compte" onBack={() => go("pricing")} step={2} of={2} />
       <div style={{ padding:"32px 20px", maxWidth:450, margin:"0 auto" }}>
         <div style={{ background:"#111420", border:"1px solid #181824", borderRadius:14, padding:"14px 18px", marginBottom:20, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
           <div>
             <div style={{ fontSize:12, color:"#6B7280", fontWeight:700 }}>Plan sélectionné</div>
-            <div style={{ fontFamily:"'Syne',sans-serif", fontSize:20, fontWeight:900, color:R, marginTop:2 }}>{plan?.name}</div>
+            <div style={{ fontFamily:"'Syne',sans-serif", fontSize:20, fontWeight:900, color:R, marginTop:2 }}>{plan?.name || "Pro"}</div>
           </div>
-          <div style={{ fontFamily:"'Syne',sans-serif", fontSize:24, fontWeight:900 }}>{plan?.price}€<span style={{ fontSize:12, color:"#6B7280", fontWeight:600 }}>/mois</span></div>
+          <div style={{ fontFamily:"'Syne',sans-serif", fontSize:24, fontWeight:900 }}>{plan?.price || 59}€<span style={{ fontSize:12, color:"#6B7280", fontWeight:600 }}>/mois</span></div>
         </div>
         <form onSubmit={submit} style={{ display:"flex", flexDirection:"column", gap:13 }}>
           <Field l="Prénom & Nom *"><input value={f.name} onChange={e => setF(v => ({ ...v, name:e.target.value }))} placeholder="Jean Dupont" style={I} /></Field>
           <Field l="Adresse email *"><input type="email" value={f.email} onChange={e => setF(v => ({ ...v, email:e.target.value }))} placeholder="jean@monrestaurant.fr" style={I} /></Field>
           <Field l="Téléphone (optionnel)"><input value={f.phone} onChange={e => setF(v => ({ ...v, phone:e.target.value }))} placeholder="+33 6 00 11 22 33" style={I} /></Field>
           <Field l="Nom de votre restaurant *"><input value={f.resto} onChange={e => setF(v => ({ ...v, resto:e.target.value }))} placeholder="Le Petit Bistrot" style={I} /></Field>
-          <Field l="Mot de passe *"><input type="password" value={f.pass} onChange={e => setF(v => ({ ...v, pass:e.target.value }))} placeholder="••••••••" style={I} /></Field>
+          <Field l="Mot de passe *"><input type="password" value={f.pass} onChange={e => setF(v => ({ ...v, pass:e.target.value }))} placeholder="•••••••• (6 min)" style={I} /></Field>
           <Field l="Confirmer le mot de passe *"><input type="password" value={f.pass2} onChange={e => setF(v => ({ ...v, pass2:e.target.value }))} placeholder="••••••••" style={I} /></Field>
-          {err && <div style={{ color:"#EF4444", fontSize:13, textAlign:"center", padding:"6px 0" }}>{err}</div>}
-          <PrimaryBtn lg full type="submit" style={{ marginTop:4 }}>Continuer vers le paiement →</PrimaryBtn>
-          <p style={{ textAlign:"center", fontSize:12, color:"#555B6E", lineHeight:1.5 }}>En créant un compte, vous acceptez nos CGV et notre politique de confidentialité.</p>
-        </form>
-      </div>
-    </div>
-  );
-}
-
-// ═════════════════════════════════════════════════════════════════════
-// PAYMENT
-// ═════════════════════════════════════════════════════════════════════
-function Payment({ go, plan, user, onOk }) {
-  const [c, setC] = useState({ num:"", exp:"", cvc:"", name:"" });
-  const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState("");
-  const fmtNum = v => v.replace(/\D/g, "").slice(0, 16).replace(/(.{4})/g, "$1 ").trim();
-  const fmtExp = v => v.replace(/\D/g, "").slice(0, 4).replace(/(.{2})/, "$1/");
-  function submit(e) {
-    e.preventDefault();
-    if (!c.num || !c.exp || !c.cvc || !c.name) { setErr("Remplissez tous les champs."); return; }
-    setLoading(true); setErr("");
-    setTimeout(() => { setLoading(false); onOk(); }, 2400);
-  }
-  return (
-    <div style={{ minHeight:"100vh", paddingBottom:60 }}>
-      <StepNav title="Paiement sécurisé" onBack={() => go("signup")} step={3} of={3} />
-      <div style={{ padding:"32px 20px", maxWidth:420, margin:"0 auto" }}>
-        <div style={{ background:"#111420", border:"1px solid #181824", borderRadius:14, padding:18, marginBottom:18 }}>
-          <div style={{ fontSize:11, fontWeight:700, color:"#6B7280", textTransform:"uppercase", letterSpacing:1, marginBottom:14 }}>Récapitulatif de commande</div>
-          {[
-            { l:`Plan ${plan?.name}`, r:`${plan?.price}€/mois` },
-            { l:"Restaurant", r:<span style={{ color:R, fontWeight:700 }}>{user?.resto}</span> },
-          ].map((row, i) => (
-            <div key={i} style={{ display:"flex", justifyContent:"space-between", fontSize:14, marginBottom:8 }}>
-              <span style={{ color:"#9CA3AF" }}>{row.l}</span>
-              <span style={{ fontWeight:700 }}>{row.r}</span>
-            </div>
-          ))}
-          <div style={{ borderTop:"1px solid #181824", paddingTop:12, marginTop:4, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-            <span style={{ fontWeight:800, fontSize:15 }}>Total aujourd'hui</span>
-            <span style={{ fontFamily:"'Syne',sans-serif", fontSize:24, fontWeight:900, color:R }}>{plan?.price}€</span>
-          </div>
-        </div>
-        <div style={{ background:"linear-gradient(135deg,#1C0600,#3E1000)", border:`1px solid ${R}45`, borderRadius:18, padding:"22px 24px", marginBottom:22, position:"relative", overflow:"hidden" }}>
-          <div style={{ position:"absolute", right:-22, top:-22, width:108, height:108, borderRadius:"50%", background:`${R}12` }} />
-          <div style={{ position:"absolute", right:28, bottom:-18, width:76, height:76, borderRadius:"50%", background:`${R}08` }} />
-          <div style={{ fontSize:10, fontWeight:800, color:R, letterSpacing:2.5, marginBottom:20, textTransform:"uppercase" }}>AdBarth Pay</div>
-          <div style={{ fontFamily:"monospace", fontSize:17, letterSpacing:3.5, color:"#fff", marginBottom:18 }}>{c.num || "•••• •••• •••• ••••"}</div>
-          <div style={{ display:"flex", justifyContent:"space-between" }}>
-            <div><div style={{ fontSize:9, color:"#6B7280", letterSpacing:1, marginBottom:3 }}>TITULAIRE</div><div style={{ fontSize:13, fontWeight:600 }}>{c.name || "NOM PRÉNOM"}</div></div>
-            <div><div style={{ fontSize:9, color:"#6B7280", letterSpacing:1, marginBottom:3 }}>EXPIRATION</div><div style={{ fontSize:13, fontWeight:600 }}>{c.exp || "MM/AA"}</div></div>
-          </div>
-        </div>
-        <form onSubmit={submit} style={{ display:"flex", flexDirection:"column", gap:13 }}>
-          <Field l="Nom sur la carte"><input value={c.name} onChange={e => setC(v => ({ ...v, name:e.target.value }))} placeholder="Jean Dupont" style={I} /></Field>
-          <Field l="Numéro de carte"><input value={c.num} onChange={e => setC(v => ({ ...v, num:fmtNum(e.target.value) }))} placeholder="1234 5678 9012 3456" maxLength={19} style={I} /></Field>
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
-            <Field l="Expiration"><input value={c.exp} onChange={e => setC(v => ({ ...v, exp:fmtExp(e.target.value) }))} placeholder="MM/AA" maxLength={5} style={I} /></Field>
-            <Field l="CVC"><input value={c.cvc} onChange={e => setC(v => ({ ...v, cvc:e.target.value.replace(/\D/, "").slice(0, 3) }))} placeholder="•••" maxLength={3} style={I} /></Field>
-          </div>
-          {err && <div style={{ color:"#EF4444", fontSize:13, textAlign:"center" }}>{err}</div>}
-          <button type="submit" disabled={loading} style={{ padding:"15px", borderRadius:13, background: loading ? "#252836" : R, color:"#fff", border:"none", fontWeight:800, fontSize:15, cursor: loading ? "not-allowed" : "pointer", boxShadow: loading ? "none" : `0 5px 26px ${R}50`, display:"flex", alignItems:"center", justifyContent:"center", gap:10, transition:"all .2s", marginTop:4 }}>
-            {loading ? <><Spinner /> Traitement en cours…</> : `🔒 Payer ${plan?.price}€ et activer mon compte`}
+          {err && <div style={{ color: err.startsWith("Compte créé") ? V : "#EF4444", fontSize:13, textAlign:"center", padding:"6px 0" }}>{err}</div>}
+          <button type="submit" disabled={loading} style={{ padding:"15px", borderRadius:12, background: loading ? "#252836" : R, color:"#fff", border:"none", fontWeight:800, fontSize:15, cursor: loading ? "not-allowed" : "pointer", marginTop:4, display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}>
+            {loading ? <><Spinner /> Création…</> : "Créer mon compte →"}
           </button>
-          <p style={{ textAlign:"center", fontSize:12, color:"#555B6E" }}>🔒 Paiement sécurisé · Sans engagement · Résiliable à tout moment</p>
+          <p style={{ textAlign:"center", fontSize:12, color:"#555B6E", lineHeight:1.5 }}>En créant un compte, vous acceptez nos CGV et notre politique de confidentialité.</p>
+          <p style={{ textAlign:"center", fontSize:12 }}>
+            <span onClick={() => go("login")} style={{ color:R, fontWeight:700, cursor:"pointer" }}>Déjà un compte ? Se connecter</span>
+          </p>
         </form>
       </div>
-    </div>
-  );
-}
-
-// ═════════════════════════════════════════════════════════════════════
-// SUCCESS
-// ═════════════════════════════════════════════════════════════════════
-function Success({ user, onEnter }) {
-  const [n, setN] = useState(5);
-  useEffect(() => {
-    const t = setInterval(() => setN(c => { if (c <= 1) { clearInterval(t); onEnter(); } return c - 1; }), 1000);
-    return () => clearInterval(t);
-  }, []);
-  return (
-    <div style={{ minHeight:"100vh", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:28, textAlign:"center" }}>
-      <div style={{ width:90, height:90, borderRadius:"50%", background:`${V}18`, border:`2px solid ${V}`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:42, marginBottom:30, boxShadow:`0 0 55px ${V}45` }}>✓</div>
-      <h2 style={{ fontFamily:"'Syne',sans-serif", fontSize:32, fontWeight:900, marginBottom:14, letterSpacing:"-0.5px" }}>Bienvenue chez AdBarth !</h2>
-      <p style={{ color:"#6B7280", fontSize:15, maxWidth:380, lineHeight:1.75, marginBottom:10 }}>
-        Votre compte <strong style={{ color:"#E8EAF0" }}>{user?.resto}</strong> est activé.<br />Configurez votre restaurant en moins de 15 minutes.
-      </p>
-      <p style={{ fontSize:13, color:"#555B6E", marginBottom:30 }}>Redirection dans {n}s…</p>
-      <PrimaryBtn lg onClick={onEnter}>Accéder à mon panneau d'administration →</PrimaryBtn>
     </div>
   );
 }
@@ -810,13 +743,6 @@ function Admin({ user, go, onLogout }) {
             <div style={{ fontSize:13, fontWeight:700, marginBottom:10 }}>Les stats se rempliront ici</div>
             <p style={{ fontSize:13, color:"#6B7280", lineHeight:1.65 }}>Dès que vos premiers appels manqués seront détectés et que vos clients utiliseront le chatbot, vos statistiques apparaîtront ici en temps réel.</p>
           </div>
-          <div style={{ background:"#111420", border:"1px solid #181824", borderRadius:16, padding:20, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-            <div>
-              <div style={{ fontSize:16, fontWeight:800 }}>Plan {PLANS.find(p => p.price === 59)?.name || "Pro"}</div>
-              <div style={{ fontSize:12, color:"#6B7280", marginTop:3 }}>Abonnement actif · Renouvellement mensuel</div>
-            </div>
-            <div style={{ fontFamily:"'Syne',sans-serif", fontSize:22, fontWeight:900, color:accent }}>59€<span style={{ fontSize:12, color:"#6B7280", fontWeight:600 }}>/mois</span></div>
-          </div>
         </>}
       </div>
     </div>
@@ -824,7 +750,7 @@ function Admin({ user, go, onLogout }) {
 }
 
 // ═════════════════════════════════════════════════════════════════════
-// SIMULATEUR APPEL MANQUÉ
+// SIMULATEUR
 // ═════════════════════════════════════════════════════════════════════
 function Simulator({ go, user }) {
   const [phase, setPhase] = useState("idle");
@@ -887,7 +813,7 @@ function Simulator({ go, user }) {
 // CHATBOT CLIENT
 // ═════════════════════════════════════════════════════════════════════
 function Chatbot({ go, user }) {
-  const restoName = user?.restoName || user?.resto || "notre restaurant";
+  const restoName = user?.resto || "notre restaurant";
   const [flow, setFlow] = useState("welcome");
   const [cat, setCat] = useState(null);
   const [cart, setCart] = useState([]);
