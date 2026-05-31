@@ -1,10 +1,22 @@
 import { useState, useRef, useEffect } from "react";
 import { supabase } from "./supabase";
 
+// ════════════════════════════════════════════════════
+// ⬇️ TON COMPTE DE CONNEXION (modifiable) ⬇️
+// ════════════════════════════════════════════════════
+const COMPTE_DEMO = {
+  email: "zachary@adbarth.fr",
+  pass: "adbarth2026",
+  name: "Zachary",
+  resto: "Chez Barth",
+  phone: "+33 6 00 11 22 33",
+};
+// ════════════════════════════════════════════════════
+
 // ── Couleurs ──────────────────────────────────────────────────────────
-const R = "#FF6B35";   // rouge/orange principal
-const OR = "#F5A623";  // or pour les prix
-const V = "#22C55E";   // vert succès
+const R = "#FF6B35";
+const OR = "#F5A623";
+const V = "#22C55E";
 const EMOJIS = ["🍔","🍕","🌮","🌯","🫓","🍗","🌭","🍟","🍝","🥗","🍣","🥙","🍜","🥘","🥩","🍖","🍮","🧁","🍰","🥤","🧃","☕","🍵","🍺","🥂","🍷"];
 
 // ── Plans ─────────────────────────────────────────────────────────────
@@ -88,32 +100,88 @@ button { font-family: 'DM Sans', sans-serif; }
 ::-webkit-scrollbar-thumb { background: #252836; border-radius: 4px; }
 `;
 
-// ── Style input réutilisable ───────────────────────────────────────────
 const I = { width: "100%", background: "#0E0F17", border: "1.5px solid #252836", borderRadius: 11, color: "#E8EAF0", fontSize: 14, padding: "12px 14px", fontFamily: "'DM Sans', sans-serif" };
 
 // ═════════════════════════════════════════════════════════════════════
 // ROOT — routeur
 // ═════════════════════════════════════════════════════════════════════
 export default function AdBarth() {
-  const [page, setPage] = useState("landing");
+  const [page, setPage] = useState("login");
   const [plan, setPlan] = useState(null);
   const [user, setUser] = useState(null);
   const [orders, setOrders] = useState([]);
   useEffect(() => db.sub(setOrders), []);
+
+  // Au chargement : si déjà connecté précédemment, va direct à l'admin
+  useEffect(() => {
+    const saved = window.name && window.name.startsWith("ADBARTH_USER:")
+      ? JSON.parse(window.name.slice("ADBARTH_USER:".length))
+      : null;
+    if (saved) { setUser(saved); setPage("admin"); }
+  }, []);
+
+  const login = u => {
+    setUser(u);
+    window.name = "ADBARTH_USER:" + JSON.stringify(u); // mémorise la session
+    setPage("admin");
+  };
+  const logout = () => {
+    setUser(null);
+    window.name = "";
+    setPage("login");
+  };
+
   const go = p => { setPage(p); window.scrollTo(0, 0); };
   return (
     <><style>{CSS}</style>
     <div style={{ minHeight:"100vh", background:"#09090F", color:"#E8EAF0", fontFamily:"'DM Sans',sans-serif" }}>
+      {page === "login" && <Login onLogin={login} go={go} />}
       {page === "landing" && <Landing go={go} />}
       {page === "pricing" && <Pricing go={go} onPick={p => { setPlan(p); go("signup"); }} />}
       {page === "signup" && <Signup go={go} plan={plan} onNext={u => { setUser(u); go("payment"); }} />}
       {page === "payment" && <Payment go={go} plan={plan} user={user} onOk={() => go("success")} />}
       {page === "success" && <Success user={user} onEnter={() => go("admin")} />}
-      {page === "admin" && <Admin user={user} go={go} />}
+      {page === "admin" && <Admin user={user} go={go} onLogout={logout} />}
       {page === "simulator" && <Simulator go={go} user={user} />}
       {page === "chatbot" && <Chatbot go={go} user={user} />}
       {page === "dashboard" && <Dashboard go={go} orders={orders} />}
     </div></>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════
+// LOGIN — page de connexion
+// ═════════════════════════════════════════════════════════════════════
+function Login({ onLogin, go }) {
+  const [email, setEmail] = useState("");
+  const [pass, setPass] = useState("");
+  const [err, setErr] = useState("");
+  function submit(e) {
+    e.preventDefault();
+    if (email.trim().toLowerCase() === COMPTE_DEMO.email.toLowerCase() && pass === COMPTE_DEMO.pass) {
+      onLogin({ name: COMPTE_DEMO.name, resto: COMPTE_DEMO.resto, phone: COMPTE_DEMO.phone, email: COMPTE_DEMO.email });
+    } else {
+      setErr("Email ou mot de passe incorrect.");
+    }
+  }
+  return (
+    <div style={{ minHeight:"100vh", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:24 }}>
+      <div style={{ marginBottom:30 }}><Logo size={28} /></div>
+      <div style={{ width:"100%", maxWidth:380, background:"#111420", border:"1px solid #181824", borderRadius:20, padding:28 }}>
+        <h2 style={{ fontFamily:"'Syne',sans-serif", fontSize:24, fontWeight:900, marginBottom:6, color:"#fff" }}>Connexion</h2>
+        <p style={{ fontSize:13, color:"#6B7280", marginBottom:24 }}>Accédez à votre espace restaurateur.</p>
+        <form onSubmit={submit} style={{ display:"flex", flexDirection:"column", gap:14 }}>
+          <Field l="Email"><input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="vous@restaurant.fr" style={I} /></Field>
+          <Field l="Mot de passe"><input type="password" value={pass} onChange={e => setPass(e.target.value)} placeholder="••••••••" style={I} /></Field>
+          {err && <div style={{ color:"#EF4444", fontSize:13, textAlign:"center" }}>{err}</div>}
+          <PrimaryBtn lg full type="submit" style={{ marginTop:4 }}>Se connecter →</PrimaryBtn>
+        </form>
+        <div style={{ borderTop:"1px solid #181824", marginTop:22, paddingTop:18, textAlign:"center" }}>
+          <p style={{ fontSize:13, color:"#6B7280" }}>Pas encore de compte ?</p>
+          <span onClick={() => go("landing")} style={{ fontSize:13, color:R, fontWeight:700, cursor:"pointer" }}>Découvrir AdBarth →</span>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -126,7 +194,7 @@ function Landing({ go }) {
       <nav style={{ position:"sticky", top:0, zIndex:100, height:62, display:"flex", alignItems:"center", justifyContent:"space-between", padding:"0 5vw", background:"rgba(9,9,15,.94)", backdropFilter:"blur(20px)", borderBottom:"1px solid #181824" }}>
         <Logo />
         <div style={{ display:"flex", gap:10 }}>
-          <GhostBtn sm onClick={() => go("simulator")}>Voir la démo</GhostBtn>
+          <GhostBtn sm onClick={() => go("login")}>Se connecter</GhostBtn>
           <PrimaryBtn sm onClick={() => go("pricing")}>Commencer →</PrimaryBtn>
         </div>
       </nav>
@@ -470,7 +538,7 @@ function Success({ user, onEnter }) {
 // ═════════════════════════════════════════════════════════════════════
 // ADMIN
 // ═════════════════════════════════════════════════════════════════════
-function Admin({ user, go }) {
+function Admin({ user, go, onLogout }) {
   const [tab, setTab] = useState("infos");
   const [cfg, setCfg] = useState({
     name: user?.resto || "", phone: user?.phone || "", address: "",
@@ -525,6 +593,7 @@ function Admin({ user, go }) {
           <AdminBtn color={R} onClick={() => go("simulator")}>📞 Test</AdminBtn>
           <AdminBtn color={V} onClick={() => go("chatbot")}>💬 Chatbot</AdminBtn>
           <AdminBtn color="#3B82F6" onClick={() => go("dashboard")}>🍽️ Cuisine</AdminBtn>
+          <AdminBtn color="#9CA3AF" onClick={onLogout}>⏻ Déco</AdminBtn>
           <ToggleSwitch value={cfg.active} onChange={v => setCfg(c => ({ ...c, active:v }))} accent={V} />
         </div>
       </div>
