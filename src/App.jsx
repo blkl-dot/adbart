@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { supabase } from "./supabase";
 
 // ── Couleurs ──────────────────────────────────────────────────────────
 const R = "#FF6B35";   // rouge/orange principal
@@ -13,13 +14,57 @@ const PLANS = [
   { key:"premium", name:"Premium", price:99, features:["SMS automatique appel manqué","Chatbot commande + réservation","SMS illimités","Dashboard cuisine temps réel","Réservations en ligne","Support prioritaire 7j/7"], missing:[] },
 ];
 
-// ── Base de données en mémoire (remplacée par Firebase en production) ─
+// ── Base de données Supabase (persistante) ─
 let _orders = [];
 let _subs = [];
+const notify = () => _subs.forEach(f => f([..._orders]));
+
+async function loadOrders() {
+  const { data, error } = await supabase
+    .from("commandes")
+    .select("*")
+    .order("cree_le", { ascending: false });
+  if (!error && data) {
+    _orders = data.map(d => ({
+      id: d.ref || d.id,
+      _dbid: d.id,
+      type: d.type,
+      client: d.client,
+      items: d.items || [],
+      total: d.total,
+      note: d.note || "",
+      status: d.status,
+      time: d.cree_le ? new Date(d.cree_le).toLocaleTimeString("fr-FR", { hour:"2-digit", minute:"2-digit" }) : "",
+    }));
+    notify();
+  }
+}
+
 const db = {
-  sub: fn => { _subs.push(fn); return () => { _subs = _subs.filter(s => s !== fn); }; },
-  add: o => { _orders = [o, ..._orders]; _subs.forEach(f => f([..._orders])); },
-  upd: (id, s) => { _orders = _orders.map(o => o.id === id ? { ...o, status: s } : o); _subs.forEach(f => f([..._orders])); },
+  sub: fn => {
+    _subs.push(fn);
+    loadOrders();
+    return () => { _subs = _subs.filter(s => s !== fn); };
+  },
+  add: async o => {
+    _orders = [o, ..._orders];
+    notify();
+    await supabase.from("commandes").insert({
+      ref: o.id,
+      type: o.type,
+      client: o.client,
+      items: o.items,
+      total: o.total,
+      note: o.note || "",
+      status: o.status,
+    });
+    loadOrders();
+  },
+  upd: async (id, s) => {
+    _orders = _orders.map(o => o.id === id ? { ...o, status: s } : o);
+    notify();
+    await supabase.from("commandes").update({ status: s }).eq("ref", id);
+  },
 };
 const uid = () => String(Date.now()).slice(-4);
 const now = () => new Date().toLocaleTimeString("fr-FR", { hour:"2-digit", minute:"2-digit" });
