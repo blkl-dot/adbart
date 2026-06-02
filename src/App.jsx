@@ -1052,13 +1052,43 @@ function Chatbot({ go, user, restoId, isPublic }) {
 // ═════════════════════════════════════════════════════════════════════
 // DASHBOARD CUISINE
 // ═════════════════════════════════════════════════════════════════════
+// ── Sonneries (synthétisées, aucun fichier audio requis) ──
+const SOUNDS = [
+  { key: "bip", label: "🔔 Bip simple" },
+  { key: "double", label: "🔔 Double bip" },
+  { key: "carillon", label: "🎵 Carillon" },
+  { key: "cloche", label: "🛎️ Cloche" },
+  { key: "alarme", label: "🚨 Alarme" },
+];
+function playSound(ctx, key) {
+  if (!ctx) return;
+  const t0 = ctx.currentTime;
+  const tone = (freq, start, dur, type = "sine", vol = 0.3) => {
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.connect(g); g.connect(ctx.destination); o.type = type; o.frequency.value = freq;
+    const s = t0 + start;
+    g.gain.setValueAtTime(0.0001, s);
+    g.gain.exponentialRampToValueAtTime(vol, s + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, s + dur);
+    o.start(s); o.stop(s + dur + 0.03);
+  };
+  if (key === "bip") tone(880, 0, 0.4);
+  else if (key === "carillon") { tone(659, 0, 0.35); tone(784, 0.18, 0.35); tone(988, 0.36, 0.55); }
+  else if (key === "cloche") { tone(1318, 0, 1.1); tone(2637, 0, 0.55, "sine", 0.12); }
+  else if (key === "alarme") { [0, 0.16, 0.32, 0.48].forEach(t => tone(1000, t, 0.12, "square", 0.25)); }
+  else { tone(880, 0, 0.32); tone(1100, 0.22, 0.36); } // double (défaut)
+}
+
 function Dashboard({ go, orders, user }) {
   const [filter, setFilter] = useState("en_cours");
-  const [soundOn, setSoundOn] = useState(true);
+  const [soundOn, setSoundOn] = useState(() => { try { return localStorage.getItem("adbarth_sound_on") !== "0"; } catch (e) { return true; } });
+  const [soundType, setSoundType] = useState(() => { try { return localStorage.getItem("adbarth_sound") || "double"; } catch (e) { return "double"; } });
   const [flash, setFlash] = useState(false);
-  const soundRef = useRef(true);
+  const soundRef = useRef(soundOn);
+  const typeRef = useRef(soundType);
   const audioRef = useRef(null);
-  useEffect(() => { soundRef.current = soundOn; }, [soundOn]);
+  useEffect(() => { soundRef.current = soundOn; try { localStorage.setItem("adbarth_sound_on", soundOn ? "1" : "0"); } catch (e) {} }, [soundOn]);
+  useEffect(() => { typeRef.current = soundType; try { localStorage.setItem("adbarth_sound", soundType); } catch (e) {} }, [soundType]);
 
   function ensureAudio() {
     try {
@@ -1066,21 +1096,7 @@ function Dashboard({ go, orders, user }) {
       if (audioRef.current.state === "suspended") audioRef.current.resume();
     } catch (e) {}
   }
-  function beep() {
-    try {
-      ensureAudio();
-      const ctx = audioRef.current; if (!ctx) return;
-      [[880, 0], [1100, 0.22]].forEach(([freq, t]) => {
-        const o = ctx.createOscillator(), g = ctx.createGain();
-        o.connect(g); g.connect(ctx.destination); o.type = "sine"; o.frequency.value = freq;
-        const start = ctx.currentTime + t;
-        g.gain.setValueAtTime(0.0001, start);
-        g.gain.exponentialRampToValueAtTime(0.35, start + 0.03);
-        g.gain.exponentialRampToValueAtTime(0.0001, start + 0.38);
-        o.start(start); o.stop(start + 0.4);
-      });
-    } catch (e) {}
-  }
+  function beep() { try { ensureAudio(); playSound(audioRef.current, typeRef.current); } catch (e) {} }
 
   // Alerte (bip + bandeau) dès qu'une NOUVELLE commande apparaît dans la liste
   const seenRef = useRef(null);
@@ -1093,10 +1109,10 @@ function Dashboard({ go, orders, user }) {
     if (isNew) { if (soundRef.current) beep(); setFlash(true); setTimeout(() => setFlash(false), 3500); }
   }, [orders]);
 
-  // Rafraîchit en continu : temps réel (instantané si activé) + sondage de secours toutes les 7s
+  // Rafraîchit en continu : temps réel (instantané si activé) + sondage de secours toutes les 5s
   useEffect(() => {
     const off = db.subscribeRealtime(() => {});
-    const timer = setInterval(() => db.reload(), 7000);
+    const timer = setInterval(() => db.reload(), 5000);
     return () => { off(); clearInterval(timer); };
   }, []);
 
@@ -1114,11 +1130,14 @@ function Dashboard({ go, orders, user }) {
     <div style={{ minHeight:"100vh", display:"flex", flexDirection:"column", maxWidth:520, margin:"0 auto" }}>
       <TopBar title="Commandes en cours" onBack={() => go("admin")} badge={nb} />
       {flash && (<div className="fu" style={{ background:`${V}18`, borderBottom:`1px solid ${V}55`, padding:"10px 16px", textAlign:"center", fontSize:14, fontWeight:800, color:V }}>🔔 Nouvelle commande reçue !</div>)}
-      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"8px 14px", background:"#09090F", borderBottom:"1px solid #181824" }}>
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:8, padding:"8px 14px", background:"#09090F", borderBottom:"1px solid #181824", flexWrap:"wrap" }}>
         <span style={{ fontSize:11, color:"#6B7280", display:"flex", alignItems:"center", gap:6 }}><span style={{ width:7, height:7, borderRadius:"50%", background:V, display:"inline-block", animation:"blink 1.6s infinite" }} />En direct</span>
-        <div style={{ display:"flex", gap:8 }}>
+        <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
+          <select value={soundType} onChange={e => { const v = e.target.value; setSoundType(v); ensureAudio(); playSound(audioRef.current, v); }} style={{ padding:"7px 10px", borderRadius:20, background:"#111420", border:"1px solid #252836", color:"#E8EAF0", fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:"inherit" }}>
+            {SOUNDS.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
+          </select>
           <button type="button" onClick={() => { ensureAudio(); beep(); }} style={{ padding:"6px 12px", borderRadius:20, background:"#181824", border:"1px solid #252836", color:"#E8EAF0", fontSize:12, fontWeight:700, cursor:"pointer" }}>🔊 Tester</button>
-          <button type="button" onClick={() => { ensureAudio(); setSoundOn(s => !s); }} style={{ padding:"6px 12px", borderRadius:20, background: soundOn ? `${V}18` : "#181824", border:`1px solid ${soundOn ? V+"55" : "#252836"}`, color: soundOn ? V : "#9CA3AF", fontSize:12, fontWeight:700, cursor:"pointer" }}>{soundOn ? "🔔 Son activé" : "🔕 Son coupé"}</button>
+          <button type="button" onClick={() => { ensureAudio(); setSoundOn(s => !s); }} style={{ padding:"6px 12px", borderRadius:20, background: soundOn ? `${V}18` : "#181824", border:`1px solid ${soundOn ? V+"55" : "#252836"}`, color: soundOn ? V : "#9CA3AF", fontSize:12, fontWeight:700, cursor:"pointer" }}>{soundOn ? "🔔 Activé" : "🔕 Coupé"}</button>
         </div>
       </div>
       <div style={{ display:"flex", background:"#09090F", borderBottom:"1px solid #181824", padding:"0 12px" }}>
