@@ -116,8 +116,11 @@ export default function AdBarth() {
   const [user, setUser] = useState(null);
   const [orders, setOrders] = useState([]);
   const [ready, setReady] = useState(false);
+  const [publicResto, setPublicResto] = useState(null);
   useEffect(() => db.sub(setOrders), []);
   useEffect(() => {
+    const rid = new URLSearchParams(window.location.search).get("r");
+    if (rid) { setPublicResto(rid); setUserId(rid); setPage("chatbot"); setReady(true); return; }
     supabase.auth.getSession().then(({ data }) => {
       if (data?.session?.user) applySession(data.session.user);
       setReady(true);
@@ -153,7 +156,7 @@ export default function AdBarth() {
       {page === "signup" && <Signup go={go} plan={plan} onLogged={applySession} />}
       {page === "admin" && <Admin user={user} go={go} onLogout={logout} />}
       {page === "simulator" && <Simulator go={go} user={user} />}
-      {page === "chatbot" && <Chatbot go={go} user={user} />}
+      {page === "chatbot" && <Chatbot go={go} user={user} restoId={publicResto || user?.id} isPublic={!!publicResto} />}
       {page === "dashboard" && <Dashboard go={go} orders={orders} user={user} />}
     </div></>
   );
@@ -476,7 +479,7 @@ function Admin({ user, go, onLogout }) {
     hours1: "12:00 – 14:30", hours2: "19:00 – 23:30", color: R, active: true, onlyHours: false,
     sms: "Bonjour ! {nom} n'a pas pu répondre à votre appel. Commandez ou réservez en ligne 👉 {lien}",
     welcome: "Bonjour ! 👋 Bienvenue chez {nom}. Que puis-je faire pour vous ?",
-    link: `https://adbarth.fr/${(user?.resto || "monrestaurant").toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "")}`,
+    link: (typeof window !== "undefined" && user?.id) ? `${window.location.origin}/?r=${user.id}` : "https://adbarth.fr",
   });
   const [menu, setMenu] = useState([]);
   const [cats, setCats] = useState(["Entrées", "Plats", "Desserts", "Boissons"]);
@@ -499,6 +502,7 @@ function Admin({ user, go, onLogout }) {
     return () => { alive = false; };
   }, []);
   const accent = cfg.color;
+  const publicLink = (typeof window !== "undefined" && user?.id) ? `${window.location.origin}/?r=${user.id}` : "";
   async function save() {
     try {
       if (user?.id) await supabase.from("comptes").update({ config: cfg, menu, cats }).eq("id", user.id);
@@ -578,6 +582,15 @@ function Admin({ user, go, onLogout }) {
                 <div style={{ flex:1, height:38, borderRadius:10, background:cfg.color, boxShadow:`0 4px 18px ${cfg.color}60` }} />
               </div>
             </Field>
+          </Card>
+          <Card>
+            <div style={{ fontSize:13, fontWeight:700, color:accent, marginBottom:4 }}>🔗 Votre lien client</div>
+            <p style={{ fontSize:12, color:"#6B7280", lineHeight:1.6 }}>C'est le lien à envoyer par SMS. Vos clients l'ouvrent sans compte et commandent directement.</p>
+            <div style={{ background:"#0E0F17", border:"1px solid #252836", borderRadius:10, padding:"10px 12px", fontSize:12, color:"#E8EAF0", wordBreak:"break-all", fontFamily:"monospace" }}>{publicLink || "Connectez-vous pour générer votre lien"}</div>
+            <div style={{ display:"flex", gap:8 }}>
+              <button type="button" onClick={() => { try { navigator.clipboard.writeText(publicLink); setToast("✓ Lien copié"); setTimeout(() => setToast(""), 2000); } catch (e) { setToast("Copie impossible, sélectionnez le lien"); setTimeout(() => setToast(""), 2500); } }} style={{ flex:1, padding:"11px", borderRadius:10, background:accent, color:"#fff", border:"none", fontWeight:700, fontSize:13, cursor:"pointer" }}>📋 Copier le lien</button>
+              <button type="button" onClick={() => publicLink && window.open(publicLink, "_blank")} style={{ padding:"11px 16px", borderRadius:10, background:"#181824", color:"#E8EAF0", border:"1px solid #252836", fontWeight:700, fontSize:13, cursor:"pointer" }}>Ouvrir ↗</button>
+            </div>
           </Card>
           <SaveBtn saved={saved} onClick={save} accent={accent} />
         </>}
@@ -727,7 +740,7 @@ function Simulator({ go, user }) {
 // ═════════════════════════════════════════════════════════════════════
 // CHATBOT CLIENT
 // ═════════════════════════════════════════════════════════════════════
-function Chatbot({ go, user }) {
+function Chatbot({ go, user, restoId, isPublic }) {
   const [menu, setMenu] = useState([]);
   const [cats, setCats] = useState([]);
   const [cfg, setCfg] = useState(null);
@@ -746,16 +759,19 @@ function Chatbot({ go, user }) {
   function bot(t, d = 420) { setTimeout(() => setMsgs(p => [...p, { r:"bot", t }]), d); }
   function usr(t) { setMsgs(p => [...p, { r:"usr", t }]); }
 
-  // Charge le menu et les réglages enregistrés du restaurant connecté
+  // Charge le menu et les réglages du restaurant (vue publique, sans connexion)
   useEffect(() => {
     let alive = true;
     (async () => {
-      if (!user?.id) { setLoadingMenu(false); return; }
-      const { data } = await supabase.from("comptes").select("menu, cats, config").eq("id", user.id).single();
+      if (isPublic && restoId) setUserId(restoId); // les commandes du client iront vers ce restaurant
+      if (!restoId) { setLoadingMenu(false); return; }
+      const { data } = await supabase.from("public_restaurants").select("resto, menu, cats, config").eq("id", restoId).single();
       if (!alive) return;
       if (Array.isArray(data?.menu)) setMenu(data.menu.filter(i => i.on !== false));
       if (Array.isArray(data?.cats)) setCats(data.cats);
-      if (data?.config) setCfg(data.config);
+      const conf = data?.config || {};
+      if (!conf.name && data?.resto) conf.name = data.resto;
+      setCfg(conf);
       setLoadingMenu(false);
     })();
     return () => { alive = false; };
@@ -932,7 +948,7 @@ function Chatbot({ go, user }) {
           </div>
         )}
 
-        {done && (<div className="fu" style={{ background:`${V}10`, border:`1px solid ${V}45`, borderRadius:14, padding:16, textAlign:"center" }}><div style={{ fontSize:14, fontWeight:700, color:V, marginBottom:12 }}>🎉 Transmis au restaurant !</div><button type="button" onClick={() => go("dashboard")} style={{ padding:"10px 24px", borderRadius:22, background:V, color:"#fff", border:"none", fontWeight:700, fontSize:13, cursor:"pointer", fontFamily:"inherit" }}>Voir dans le dashboard →</button></div>)}
+        {done && (<div className="fu" style={{ background:`${V}10`, border:`1px solid ${V}45`, borderRadius:14, padding:16, textAlign:"center" }}><div style={{ fontSize:14, fontWeight:700, color:V, marginBottom: isPublic ? 0 : 12 }}>🎉 Transmis au restaurant !</div>{!isPublic && <button type="button" onClick={() => go("dashboard")} style={{ padding:"10px 24px", borderRadius:22, background:V, color:"#fff", border:"none", fontWeight:700, fontSize:13, cursor:"pointer", fontFamily:"inherit" }}>Voir dans le dashboard →</button>}</div>)}
         <div ref={ref} />
       </div>
       {curQR.length > 0 && !done && (<div style={{ padding:"8px 14px", display:"flex", gap:8, overflowX:"auto", borderTop:"1px solid #181824", background:"#09090F" }}>{curQR.map(r => (<button key={r} type="button" onClick={() => q(r)} style={{ flexShrink:0, padding:"8px 14px", borderRadius:22, background:"#111420", border:`1px solid ${R}50`, color:R, fontSize:13, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap", fontFamily:"inherit" }}>{r}</button>))}</div>)}
