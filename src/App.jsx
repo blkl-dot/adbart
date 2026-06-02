@@ -9,9 +9,9 @@ const EMOJIS = ["🍔","🍕","🌮","🌯","🫓","🍗","🌭","🍟","🍝","
 
 // ── Plans (tous incluent : SMS appel manqué + lien + chatbot + cuisine) ──
 const PLANS = [
-  { key:"starter", name:"Starter", price:29, features:["SMS automatique sur appel manqué","Lien de commande envoyé par SMS","Chatbot commande + réservation","Dashboard cuisine temps réel","Jusqu'à 100 SMS/mois"], missing:["SMS illimités","Installation faite par un technicien"] },
-  { key:"pro", name:"Pro", price:59, popular:true, features:["SMS automatique sur appel manqué","Lien de commande envoyé par SMS","Chatbot commande + réservation","Dashboard cuisine temps réel","SMS illimités"], missing:["Installation faite par un technicien"] },
-  { key:"premium", name:"Premium", price:99, features:["SMS automatique sur appel manqué","Lien de commande envoyé par SMS","Chatbot commande + réservation","Dashboard cuisine temps réel","SMS illimités","Installation faite par un technicien (panel admin configuré pour vous)"], missing:[] },
+  { key:"starter", name:"Starter", price:29.86, features:["SMS automatique sur appel manqué","Lien de commande envoyé par SMS","Chatbot commande + réservation","Dashboard cuisine temps réel","Jusqu'à 100 SMS/mois"], missing:["SMS illimités","Installation faite par un technicien"] },
+  { key:"pro", name:"Pro", price:49.86, popular:true, features:["SMS automatique sur appel manqué","Lien de commande envoyé par SMS","Chatbot commande + réservation","Dashboard cuisine temps réel","SMS illimités"], missing:["Installation faite par un technicien"] },
+  { key:"premium", name:"Premium", price:79.90, features:["SMS automatique sur appel manqué","Lien de commande envoyé par SMS","Chatbot commande + réservation","Dashboard cuisine temps réel","SMS illimités","Installation faite par un technicien (panel admin configuré pour vous)"], missing:[] },
 ];
 
 // ── Base de données Supabase (liée au compte connecté) ─
@@ -194,7 +194,7 @@ function Landing({ go }) {
           <GhostBtn lg onClick={() => go("simulator")}>📞 Voir la démo</GhostBtn>
         </div>
         <p className="fu" style={{ fontSize:13, color:"#555B6E", animationDelay:".4s" }}>
-          <strong style={{ color:"#E8EAF0" }}>À partir de 29€/mois</strong> · Sans engagement · Installation en 15 min
+          <strong style={{ color:"#E8EAF0" }}>À partir de 29,86€/mois</strong> · Sans engagement · Installation en 15 min
         </p>
         <p className="fu" style={{ fontSize:13, color:"#9CA3AF", animationDelay:".45s", marginTop:14 }}>
           Déjà un compte ? <span onClick={() => go("login")} style={{ color:R, fontWeight:700, cursor:"pointer" }}>Se connecter →</span>
@@ -280,7 +280,7 @@ function Landing({ go }) {
             { l:"Chatbot commande propre", a:"✓", b:"✗" },
             { l:"Dashboard cuisine", a:"✓", b:"✗" },
             { l:"Vos clients restent vôtres", a:"✓",b:"✗" },
-            { l:"Coût mensuel", a:"Fixe dès 29€", b:"Variable + %" },
+            { l:"Coût mensuel", a:"Fixe dès 29,86€", b:"Variable + %" },
           ].map((row, i) => (
             <div key={row.l} style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", padding:"13px 18px", borderBottom: i < 5 ? "1px solid #181824" : "none", background: i % 2 === 1 ? "#0E0F17" : "transparent" }}>
               <div style={{ fontSize:13, color:"#9CA3AF" }}>{row.l}</div>
@@ -348,7 +348,7 @@ function Pricing({ go, onPick }) {
               {p.popular && (<div style={{ position:"absolute", top:-13, left:"50%", transform:"translateX(-50%)", background:R, color:"#fff", padding:"4px 18px", borderRadius:100, fontSize:11, fontWeight:800, whiteSpace:"nowrap" }}>⭐ Le plus choisi</div>)}
               <div style={{ fontSize:12, fontWeight:700, color:"#6B7280", textTransform:"uppercase", letterSpacing:1, marginBottom:10 }}>{p.name}</div>
               <div style={{ fontFamily:"'Syne',sans-serif", fontSize:46, fontWeight:900, color:"#fff", lineHeight:1, marginBottom:4 }}>
-                <sup style={{ fontSize:20, verticalAlign:"top", marginTop:8, display:"inline-block" }}>€</sup>{p.price}
+                <sup style={{ fontSize:20, verticalAlign:"top", marginTop:8, display:"inline-block" }}>€</sup>{p.price.toFixed(2).replace(".", ",")}
               </div>
               <div style={{ fontSize:13, color:"#6B7280", marginBottom:24 }}>par mois · sans engagement</div>
               <ul style={{ listStyle:"none", display:"flex", flexDirection:"column", gap:10, marginBottom:26 }}>
@@ -394,7 +394,7 @@ function Signup({ go, plan, onLogged }) {
       return;
     }
     if (data?.user) {
-      await supabase.from("comptes").update({ plan: chosenPlan.key, prix: chosenPlan.price }).eq("id", data.user.id);
+      await supabase.from("comptes").update({ plan: chosenPlan.key, prix: Math.round(chosenPlan.price) }).eq("id", data.user.id);
       if (data.session) { onLogged(data.user); }
       else { setErr("Compte créé ! Vérifiez votre email pour confirmer, puis connectez-vous."); }
     }
@@ -408,7 +408,7 @@ function Signup({ go, plan, onLogged }) {
             <div style={{ fontSize:12, color:"#6B7280", fontWeight:700 }}>Plan sélectionné</div>
             <div style={{ fontFamily:"'Syne',sans-serif", fontSize:20, fontWeight:900, color:R, marginTop:2 }}>{chosenPlan.name}</div>
           </div>
-          <div style={{ fontFamily:"'Syne',sans-serif", fontSize:24, fontWeight:900 }}>{chosenPlan.price}€<span style={{ fontSize:12, color:"#6B7280", fontWeight:600 }}>/mois</span></div>
+          <div style={{ fontFamily:"'Syne',sans-serif", fontSize:24, fontWeight:900 }}>{chosenPlan.price.toFixed(2).replace(".", ",")}€<span style={{ fontSize:12, color:"#6B7280", fontWeight:600 }}>/mois</span></div>
         </div>
         <form onSubmit={submit} style={{ display:"flex", flexDirection:"column", gap:13 }}>
           <Field l="Prénom & Nom *"><input value={f.name} onChange={e => setF(v => ({ ...v, name:e.target.value }))} placeholder="Jean Dupont" style={I} /></Field>
@@ -621,7 +621,7 @@ function Admin({ user, go, onLogout }) {
           </div>
           <div style={{ background:"#111420", border:"1px solid #181824", borderRadius:16, padding:20, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
             <div><div style={{ fontSize:16, fontWeight:800 }}>Plan {planName}</div><div style={{ fontSize:12, color:"#6B7280", marginTop:3 }}>Abonnement actif · Renouvellement mensuel</div></div>
-            <div style={{ fontFamily:"'Syne',sans-serif", fontSize:22, fontWeight:900, color:accent }}>{planPrice}€<span style={{ fontSize:12, color:"#6B7280", fontWeight:600 }}>/mois</span></div>
+            <div style={{ fontFamily:"'Syne',sans-serif", fontSize:22, fontWeight:900, color:accent }}>{planPrice.toFixed(2).replace(".", ",")}€<span style={{ fontSize:12, color:"#6B7280", fontWeight:600 }}>/mois</span></div>
           </div>
         </>}
       </div>
