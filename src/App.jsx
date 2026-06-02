@@ -5,24 +5,14 @@ import { supabase } from "./supabase";
 const R = "#FF6B35";
 const OR = "#F5A623";
 const V = "#22C55E";
-const BL = "#8B5CF6"; // violet pour l'assistant vocal
 const EMOJIS = ["🍔","🍕","🌮","🌯","🫓","🍗","🌭","🍟","🍝","🥗","🍣","🥙","🍜","🥘","🥩","🍖","🍮","🧁","🍰","🥤","🧃","☕","🍵","🍺","🥂","🍷"];
 
-// ── Plans ─────────────────────────────────────────────────────────────
+// ── Plans (tous incluent : SMS appel manqué + lien + chatbot + cuisine) ──
 const PLANS = [
-  { key:"starter", name:"Starter", price:29, features:["SMS automatique appel manqué","Chatbot commande + réservation","Dashboard cuisine temps réel"], missing:["Assistant vocal IA","Support prioritaire 7j/7"] },
-  { key:"pro", name:"Pro", price:59, popular:true, features:["SMS automatique appel manqué","Chatbot commande + réservation","Dashboard cuisine temps réel","Assistant vocal IA","SMS illimités"], missing:["Support prioritaire 7j/7"] },
-  { key:"premium", name:"Premium", price:99, features:["SMS automatique appel manqué","Chatbot commande + réservation","Dashboard cuisine temps réel","Assistant vocal IA","SMS illimités","Support prioritaire 7j/7"], missing:[] },
+  { key:"starter", name:"Starter", price:29, features:["SMS automatique sur appel manqué","Lien de commande envoyé par SMS","Chatbot commande + réservation","Dashboard cuisine temps réel","Jusqu'à 100 SMS/mois"], missing:["SMS illimités","Support prioritaire 7j/7"] },
+  { key:"pro", name:"Pro", price:59, popular:true, features:["SMS automatique sur appel manqué","Lien de commande envoyé par SMS","Chatbot commande + réservation","Dashboard cuisine temps réel","SMS illimités"], missing:["Support prioritaire 7j/7"] },
+  { key:"premium", name:"Premium", price:99, features:["SMS automatique sur appel manqué","Lien de commande envoyé par SMS","Chatbot commande + réservation","Dashboard cuisine temps réel","SMS illimités","Support prioritaire 7j/7"], missing:[] },
 ];
-
-// ── Droits par plan ───────────────────────────────────────────────────
-// cuisine = dashboard cuisine · vocal = assistant vocal
-const PLAN_FEATURES = {
-  starter: { cuisine: true,  vocal: false },
-  pro:     { cuisine: true,  vocal: true  },
-  premium: { cuisine: true,  vocal: true  },
-};
-const planRights = key => PLAN_FEATURES[key] || PLAN_FEATURES.starter;
 
 // ── Base de données Supabase (liée au compte connecté) ─
 let _orders = [];
@@ -73,7 +63,6 @@ body { font-family: 'DM Sans', sans-serif; background: #09090F; color: #E8EAF0; 
 @keyframes ring { 0%,100%{transform:rotate(0)} 20%{transform:rotate(-14deg)} 60%{transform:rotate(14deg)} }
 @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
 @keyframes glow { 0%,100%{box-shadow:0 0 20px #FF6B3535} 50%{box-shadow:0 0 55px #FF6B3570} }
-@keyframes vpulse { 0%{transform:scale(1);opacity:.7} 50%{transform:scale(1.35);opacity:0} 100%{transform:scale(1);opacity:0} }
 .fu { animation: fadeUp .38s ease both; }
 input:focus, textarea:focus, select:focus { outline: none; }
 button { font-family: 'DM Sans', sans-serif; }
@@ -130,7 +119,6 @@ export default function AdBarth() {
       {page === "simulator" && <Simulator go={go} user={user} />}
       {page === "chatbot" && <Chatbot go={go} user={user} />}
       {page === "dashboard" && <Dashboard go={go} orders={orders} user={user} />}
-      {page === "vocal" && <VocalAssistant go={go} user={user} />}
     </div></>
   );
 }
@@ -199,7 +187,7 @@ function Landing({ go }) {
           <span style={{ color:R }}>vos clients partent ailleurs.</span>
         </h1>
         <p className="fu" style={{ fontSize:"clamp(14px,1.8vw,18px)", color:"#6B7280", maxWidth:500, lineHeight:1.75, marginBottom:40, animationDelay:".2s" }}>
-          AdBarth envoie un SMS automatique à chaque appel manqué. Le client clique, commande ou réserve — et la commande arrive directement en cuisine.
+          AdBarth envoie un SMS automatique à chaque appel manqué. Le client clique sur le lien, commande ou réserve — et la commande arrive directement en cuisine.
         </p>
         <div className="fu" style={{ display:"flex", gap:12, flexWrap:"wrap", justifyContent:"center", marginBottom:20, animationDelay:".3s" }}>
           <PrimaryBtn lg onClick={() => go("pricing")}>Récupérer mes appels manqués →</PrimaryBtn>
@@ -211,7 +199,7 @@ function Landing({ go }) {
         <div className="fu" style={{ display:"flex", alignItems:"center", flexWrap:"wrap", justifyContent:"center", marginTop:60, animationDelay:".5s" }}>
           {[
             { i:"📵", l:"Appel manqué" },
-            { i:"💬", l:"SMS automatique" },
+            { i:"💬", l:"SMS + lien" },
             { i:"🤖", l:"Client commande" },
             { i:"🍽️", l:"Arrive en cuisine" },
           ].map((s, idx) => (
@@ -243,8 +231,8 @@ function Landing({ go }) {
         <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(210px,1fr))", gap:18, maxWidth:880, margin:"0 auto" }}>
           {[
             { n:"01", i:"📵", t:"Appel manqué détecté", d:"Un client appelle. Vous êtes occupé. AdBarth détecte l'appel manqué en temps réel, dès la première sonnerie sans réponse." },
-            { n:"02", i:"💬", t:"SMS envoyé en 3 secondes", d:`Le client reçoit : "Bonjour ! Nous n'avons pas pu répondre. Cliquez ici pour prendre RDV ou passer une commande 👉 [lien]"` },
-            { n:"03", i:"🤖", t:"Chatbot prend la commande", d:"Le client choisit sur votre vrai menu, réserve une table ou pose une question. Le chatbot gère tout, 24h/24." },
+            { n:"02", i:"💬", t:"SMS envoyé en 3 secondes", d:`Le client reçoit un SMS avec un lien cliquable : "Nous n'avons pas pu répondre. Cliquez ici pour commander ou réserver 👉 [lien]"` },
+            { n:"03", i:"🤖", t:"Le client clique et commande", d:"Le lien ouvre votre chatbot. Le client choisit sur votre menu, réserve une table ou pose une question, en totale autonomie, 24h/24." },
             { n:"04", i:"🍽️", t:"Commande en cuisine", d:"La commande s'affiche instantanément sur votre écran cuisine. Zéro saisie manuelle, zéro appel, zéro erreur." },
           ].map(s => (
             <HoverCard key={s.n}>
@@ -261,9 +249,9 @@ function Landing({ go }) {
         <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(230px,1fr))", gap:16, maxWidth:900, margin:"0 auto" }}>
           {[
             { i:"📱", t:"SMS automatique", d:"Envoyé en 3s après chaque appel manqué. Personnalisé à votre restaurant, à votre ton." },
+            { i:"🔗", t:"Lien de commande", d:"Le SMS contient un lien cliquable qui ouvre directement votre chatbot de commande." },
             { i:"🤖", t:"Chatbot de commande", d:"Votre vrai menu, vos catégories. Le client commande ou réserve en totale autonomie." },
             { i:"🍽️", t:"Dashboard cuisine", d:"Commandes et réservations arrivent en temps réel sur votre écran cuisine." },
-            { i:"🎙️", t:"Assistant vocal IA", d:"Vos clients parlent, l'assistant répond à voix haute et prend les réservations. (Plans Pro et Premium)" },
             { i:"💰", t:"0% de commission", d:"Forfait fixe mensuel. Pas 25-30% prélevés sur chaque commande comme Uber Eats." },
             { i:"🔒", t:"Vos données, vos clients", d:"On ne revend jamais vos contacts. Vos clients restent les vôtres, pas ceux d'une plateforme." },
           ].map(w => (
@@ -287,7 +275,7 @@ function Landing({ go }) {
             { l:"Commission par commande", a:"0%", b:"25–30%" },
             { l:"SMS appel manqué", a:"✓", b:"✗" },
             { l:"Chatbot commande propre", a:"✓", b:"✗" },
-            { l:"Assistant vocal", a:"✓", b:"✗" },
+            { l:"Dashboard cuisine", a:"✓", b:"✗" },
             { l:"Vos clients restent vôtres", a:"✓",b:"✗" },
             { l:"Coût mensuel", a:"Fixe dès 29€", b:"Variable + %" },
           ].map((row, i) => (
@@ -305,7 +293,7 @@ function Landing({ go }) {
           {[
             { t:"Pendant le rush du vendredi on ratait 15-20 appels. Maintenant ces clients reçoivent un SMS et commandent en ligne. On a récupéré des commandes qu'on aurait perdues.", n:"Karim B.", r:"Restaurant · Lyon" },
             { t:"J'étais sur Uber Eats, je payais une fortune en commission. AdBarth m'a coûté 49€ le premier mois et j'ai récupéré mes clients directement. Rentable dès la première semaine.", n:"Sarah M.", r:"Fast-food · Paris" },
-            { t:"L'assistant vocal impressionne mes clients. Ils appellent, ça décroche, ça prend la réservation tout seul. On dirait le futur.", n:"Naïm B.", r:"Fast-food · Marseille" },
+            { t:"Le dashboard cuisine a changé notre organisation. Les commandes en ligne arrivent au même endroit, mon équipe ne rate plus rien.", n:"Naïm B.", r:"Fast-food · Marseille" },
           ].map(t => (
             <div key={t.n} style={{ background:"#111420", border:"1px solid #181824", borderRadius:18, padding:24 }}>
               <div style={{ color:OR, fontSize:14, letterSpacing:3, marginBottom:14 }}>★★★★★</div>
@@ -438,7 +426,6 @@ function Signup({ go, plan, onLogged }) {
 // ADMIN
 // ═════════════════════════════════════════════════════════════════════
 function Admin({ user, go, onLogout }) {
-  const rights = planRights(user?.plan);
   const planName = (PLANS.find(p => p.key === user?.plan) || PLANS[0]).name;
   const planPrice = (PLANS.find(p => p.key === user?.plan) || PLANS[0]).price;
   const [tab, setTab] = useState("infos");
@@ -459,8 +446,6 @@ function Admin({ user, go, onLogout }) {
   const [showEm, setShowEm] = useState(false);
   const accent = cfg.color;
   function save() { setSaved(true); setToast("✓ Modifications sauvegardées"); setTimeout(() => { setSaved(false); setToast(""); }, 2600); }
-  function showToast(msg) { setToast(msg); setTimeout(() => setToast(""), 2800); }
-  function clickVocal() { if (rights.vocal) go("vocal"); else showToast("🔒 Assistant vocal réservé aux plans Pro et Premium"); }
   function addItem() {
     if (!form.name || !form.price || !form.cat) return;
     if (editId !== null) { setMenu(m => m.map(i => i.id === editId ? { ...form, id:editId, on:true } : i)); setEditId(null); }
@@ -479,7 +464,7 @@ function Admin({ user, go, onLogout }) {
   ];
   return (
     <div style={{ minHeight:"100vh", display:"flex", flexDirection:"column", maxWidth:520, margin:"0 auto" }}>
-      {toast && (<div className="fu" style={{ position:"fixed", bottom:28, left:"50%", transform:"translateX(-50%)", background: toast.startsWith("🔒") ? BL : V, color:"#fff", padding:"10px 24px", borderRadius:22, fontSize:13, fontWeight:700, zIndex:300, maxWidth:"90%", textAlign:"center" }}>{toast}</div>)}
+      {toast && (<div className="fu" style={{ position:"fixed", bottom:28, left:"50%", transform:"translateX(-50%)", background:V, color:"#fff", padding:"10px 24px", borderRadius:22, fontSize:13, fontWeight:700, zIndex:300, maxWidth:"90%", textAlign:"center" }}>{toast}</div>)}
       <div style={{ background:"#111420", borderBottom:"1px solid #181824", padding:"12px 16px", display:"flex", alignItems:"center", justifyContent:"space-between", position:"sticky", top:0, zIndex:20 }}>
         <div>
           <div style={{ display:"flex", alignItems:"center", gap:8 }}>
@@ -493,7 +478,6 @@ function Admin({ user, go, onLogout }) {
           <AdminBtn color={R} onClick={() => go("simulator")}>📞 Test</AdminBtn>
           <AdminBtn color={V} onClick={() => go("chatbot")}>💬 Chatbot</AdminBtn>
           <AdminBtn color="#3B82F6" onClick={() => go("dashboard")}>🍽️ Cuisine</AdminBtn>
-          <AdminBtn color={rights.vocal ? BL : "#555B6E"} onClick={clickVocal}>{rights.vocal ? "🎙️ Vocal" : "🔒 Vocal"}</AdminBtn>
           <AdminBtn color="#9CA3AF" onClick={onLogout}>⏻ Déco</AdminBtn>
           <ToggleSwitch value={cfg.active} onChange={v => setCfg(c => ({ ...c, active:v }))} accent={V} />
         </div>
@@ -539,6 +523,7 @@ function Admin({ user, go, onLogout }) {
             <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:4 }}>
               {["{nom}", "{lien}", "{horaires}"].map(v => (<span key={v} style={{ background:"#181824", border:"1px solid #252836", borderRadius:8, padding:"4px 10px", fontSize:12, color:accent, fontWeight:700, fontFamily:"monospace" }}>{v}</span>))}
             </div>
+            <p style={{ fontSize:12, color:"#555B6E" }}>{"{lien}"} = lien cliquable qui ouvre votre chatbot</p>
           </Card>
           <Card>
             <Field l="Message SMS envoyé au client"><textarea value={cfg.sms} onChange={e => setCfg(c => ({ ...c, sms:e.target.value }))} rows={4} style={{ ...I, resize:"none", lineHeight:1.7 }} /></Field>
@@ -563,7 +548,6 @@ function Admin({ user, go, onLogout }) {
               <Toggle label="🍔 Prise de commande à emporter" value={true} accent={V} />
               <Toggle label="📅 Réservation de table" value={true} accent={V} />
               <Toggle label="❓ Réponses automatiques aux questions" value={true} accent={V} />
-              <Toggle label={`🎙️ Assistant vocal ${rights.vocal ? "" : "(Pro/Premium)"}`} value={rights.vocal} accent={BL} />
             </div>
           </Card>
           <SaveBtn saved={saved} onClick={save} accent={accent} />
@@ -633,7 +617,6 @@ function Admin({ user, go, onLogout }) {
             <div><div style={{ fontSize:16, fontWeight:800 }}>Plan {planName}</div><div style={{ fontSize:12, color:"#6B7280", marginTop:3 }}>Abonnement actif · Renouvellement mensuel</div></div>
             <div style={{ fontFamily:"'Syne',sans-serif", fontSize:22, fontWeight:900, color:accent }}>{planPrice}€<span style={{ fontSize:12, color:"#6B7280", fontWeight:600 }}>/mois</span></div>
           </div>
-          {!rights.vocal && (<div style={{ background:`${BL}10`, border:`1px solid ${BL}45`, borderRadius:16, padding:18 }}><div style={{ fontSize:14, fontWeight:800, color:BL, marginBottom:6 }}>🔒 Assistant vocal verrouillé</div><p style={{ fontSize:13, color:"#9CA3AF", lineHeight:1.6 }}>L'assistant vocal IA est disponible à partir du plan Pro (59€/mois). Passez à un plan supérieur pour en profiter.</p></div>)}
         </>}
       </div>
     </div>
@@ -641,295 +624,7 @@ function Admin({ user, go, onLogout }) {
 }
 
 // ═════════════════════════════════════════════════════════════════════
-// ASSISTANT VOCAL — écoute + parle (Web Speech API, gratuit)
-// ═════════════════════════════════════════════════════════════════════
-function VocalAssistant({ go, user }) {
-  const rights = planRights(user?.plan);
-  const restoName = user?.resto || "notre restaurant";
-  const [supported, setSupported] = useState(true);
-  const [listening, setListening] = useState(false);
-  const [speaking, setSpeaking] = useState(false);
-  const [active, setActive] = useState(false);          // session mains libres en cours
-  const [log, setLog] = useState([]);                    // {who:'bot'|'usr', t}
-  const [resv, setResv] = useState({});
-  const [cart, setCart] = useState([]);
-  const [step, setStep] = useState("idle");              // idle, intent, r_persons, r_date, r_time, r_confirm, o_items, o_confirm, ended
-  const recRef = useRef(null);
-  const logRef = useRef(null);
-  const stepRef = useRef("idle");
-  const resvRef = useRef({});
-  const cartRef = useRef([]);
-  const activeRef = useRef(false);
-  const speakingRef = useRef(false);
-  const listeningRef = useRef(false);
-  const gotResultRef = useRef(false);
-  const voiceRef = useRef(null);
-
-  useEffect(() => { stepRef.current = step; }, [step]);
-  useEffect(() => { resvRef.current = resv; }, [resv]);
-  useEffect(() => { cartRef.current = cart; }, [cart]);
-  useEffect(() => logRef.current?.scrollIntoView({ behavior:"smooth" }), [log]);
-
-  // Choix de la meilleure voix française disponible
-  useEffect(() => {
-    function pickVoice() {
-      const voices = window.speechSynthesis?.getVoices?.() || [];
-      const fr = voices.filter(v => v.lang && v.lang.toLowerCase().startsWith("fr"));
-      const preferred =
-        fr.find(v => /google/i.test(v.name)) ||
-        fr.find(v => /(amélie|amelie|audrey|virginie|marie|julie|léa|lea|charlotte)/i.test(v.name)) ||
-        fr.find(v => /natural|enhanced|premium/i.test(v.name)) ||
-        fr[0] || null;
-      if (preferred) voiceRef.current = preferred;
-    }
-    pickVoice();
-    if (window.speechSynthesis) window.speechSynthesis.onvoiceschanged = pickVoice;
-    return () => { if (window.speechSynthesis) window.speechSynthesis.onvoiceschanged = null; };
-  }, []);
-
-  // Nettoyage en quittant
-  useEffect(() => () => { stopAll(); }, []);
-
-  // Bloque l'accès si pas le bon plan
-  if (!rights.vocal) {
-    return (
-      <div style={{ minHeight:"100vh", display:"flex", flexDirection:"column", maxWidth:480, margin:"0 auto" }}>
-        <TopBar title="Assistant vocal" onBack={() => go("admin")} />
-        <div style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:30, textAlign:"center", gap:18 }}>
-          <div style={{ fontSize:54 }}>🔒</div>
-          <h2 style={{ fontFamily:"'Syne',sans-serif", fontSize:24, fontWeight:900, color:"#fff" }}>Fonctionnalité Pro</h2>
-          <p style={{ fontSize:14, color:"#9CA3AF", lineHeight:1.7, maxWidth:340 }}>L'assistant vocal IA est disponible à partir du plan <strong style={{ color:BL }}>Pro (59€/mois)</strong>.</p>
-          <PrimaryBtn lg onClick={() => go("admin")}>← Retour à l'admin</PrimaryBtn>
-        </div>
-      </div>
-    );
-  }
-
-  function stopAll() {
-    activeRef.current = false;
-    try { recRef.current?.stop(); } catch (e) {}
-    try { recRef.current?.abort?.(); } catch (e) {}
-    try { window.speechSynthesis?.cancel(); } catch (e) {}
-    listeningRef.current = false; speakingRef.current = false;
-  }
-
-  // L'assistant parle, puis (si la session est active) se remet à écouter
-  function speak(text, after) {
-    setLog(l => [...l, { who:"bot", t:text }]);
-    let done = false;
-    const finish = () => { if (done) return; done = true; speakingRef.current = false; setSpeaking(false); if (after) after(); };
-    try {
-      window.speechSynthesis.cancel();
-      const u = new SpeechSynthesisUtterance(text);
-      u.lang = "fr-FR";
-      if (voiceRef.current) u.voice = voiceRef.current;
-      u.rate = 1.02; u.pitch = 1.08;   // un peu plus vivant, moins robotique
-      speakingRef.current = true; setSpeaking(true);
-      u.onend = finish; u.onerror = finish;
-      // sécurité si onend ne se déclenche pas
-      setTimeout(finish, 1200 + text.length * 95);
-      window.speechSynthesis.speak(u);
-    } catch (e) { finish(); }
-  }
-  function usrSay(text) { setLog(l => [...l, { who:"usr", t:text }]); }
-
-  // Parle puis écoute automatiquement (cœur du mode mains libres)
-  function botTurn(text) {
-    speak(text, () => { if (activeRef.current && stepRef.current !== "ended") beginListen(); });
-  }
-
-  function beginListen() {
-    if (!activeRef.current || speakingRef.current || listeningRef.current) return;
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) { setSupported(false); return; }
-    const rec = new SR();
-    rec.lang = "fr-FR"; rec.interimResults = false; rec.maxAlternatives = 1; rec.continuous = false;
-    gotResultRef.current = false;
-    rec.onresult = e => {
-      const txt = e.results[0][0].transcript;
-      gotResultRef.current = true;
-      listeningRef.current = false; setListening(false);
-      handle(txt);
-    };
-    rec.onend = () => {
-      listeningRef.current = false; setListening(false);
-      // silence / pas de résultat → on relance l'écoute si la session continue
-      if (activeRef.current && !speakingRef.current && stepRef.current !== "ended" && !gotResultRef.current) {
-        setTimeout(() => beginListen(), 350);
-      }
-    };
-    rec.onerror = () => {
-      listeningRef.current = false; setListening(false);
-      if (activeRef.current && !speakingRef.current && stepRef.current !== "ended") {
-        setTimeout(() => beginListen(), 600);
-      }
-    };
-    recRef.current = rec;
-    listeningRef.current = true; setListening(true);
-    try { rec.start(); } catch (e) { listeningRef.current = false; setListening(false); }
-  }
-
-  function parseNum(txt, t) {
-    const n = txt.match(/\d+/);
-    if (n) return n[0];
-    const map = { "un":"1","une":"1","deux":"2","trois":"3","quatre":"4","cinq":"5","six":"6","sept":"7","huit":"8","neuf":"9","dix":"10" };
-    for (const k in map) if (t.includes(k)) return map[k];
-    return null;
-  }
-
-  function startConversation() {
-    window.speechSynthesis?.cancel();
-    setLog([]); setResv({}); setCart([]); resvRef.current = {}; cartRef.current = [];
-    setStep("intent"); stepRef.current = "intent";
-    setActive(true); activeRef.current = true;
-    botTurn(`Bonjour, je suis votre assistant pour le restaurant ${restoName}. Je peux répondre à vos questions, vous aider à réserver une table, ou passer une commande. Que souhaitez-vous faire ?`);
-  }
-
-  function endPolitely() {
-    setStep("ended"); stepRef.current = "ended";
-    setActive(false); activeRef.current = false;
-    speak("Merci beaucoup et à très bientôt !");
-  }
-
-  function handle(txt) {
-    usrSay(txt);
-    const t = txt.toLowerCase();
-    const s = stepRef.current;
-
-    // ── Choix de l'intention ──
-    if (s === "intent") {
-      if (/(réserv|reserv|table)/.test(t)) { setStep("r_persons"); stepRef.current = "r_persons"; botTurn("Avec plaisir. Pour combien de personnes souhaitez-vous réserver ?"); return; }
-      if (/(command|commande|commander|manger|plat|emporter|prendre)/.test(t)) { setStep("o_items"); stepRef.current = "o_items"; setCart([]); cartRef.current = []; botTurn("Très bien. Quel plat souhaitez-vous commander ?"); return; }
-      if (/(horaire|ouvert|heure|fermé|ferme)/.test(t)) { botTurn("Nous sommes ouverts tous les jours : le midi de midi à quatorze heures trente, et le soir de dix-neuf heures à vingt-trois heures trente. Souhaitez-vous réserver, commander, ou autre chose ?"); return; }
-      if (/(adresse|où|ou êtes|situé|trouve|adress)/.test(t)) { botTurn("Vous nous trouverez à l'adresse indiquée sur notre page. Souhaitez-vous réserver une table ou passer une commande ?"); return; }
-      if (/(livr|livraison)/.test(t)) { botTurn("Nous ne faisons pas de livraison pour le moment, mais vous pouvez commander à emporter. Souhaitez-vous passer une commande ?"); return; }
-      if (/(allerg|gluten|lactose|végé|vege|vegan)/.test(t)) { botTurn("Nos plats peuvent contenir des allergènes. Précisez votre allergie au moment de la commande et nous en tiendrons compte. Souhaitez-vous autre chose ?"); return; }
-      if (/(non|merci|rien|c'est tout|cest tout|au revoir|fini|terminé|termine)/.test(t)) { endPolitely(); return; }
-      botTurn("Je peux vous aider à réserver une table, passer une commande, ou répondre à vos questions sur le restaurant. Que souhaitez-vous faire ?");
-      return;
-    }
-
-    // ── Réservation ──
-    if (s === "r_persons") {
-      const num = parseNum(txt, t);
-      if (num) { const r = { ...resvRef.current, persons:num }; setResv(r); resvRef.current = r; setStep("r_date"); stepRef.current = "r_date"; botTurn(`Parfait, une table pour ${num}. Pour quelle date ? Par exemple ce soir, demain, ou samedi.`); }
-      else { botTurn("Je n'ai pas compris le nombre de personnes. Pouvez-vous répéter ?"); }
-      return;
-    }
-    if (s === "r_date") { const r = { ...resvRef.current, date:txt }; setResv(r); resvRef.current = r; setStep("r_time"); stepRef.current = "r_time"; botTurn("Très bien. À quelle heure souhaitez-vous venir ?"); return; }
-    if (s === "r_time") { const r = { ...resvRef.current, time:txt }; setResv(r); resvRef.current = r; setStep("r_confirm"); stepRef.current = "r_confirm"; botTurn(`Je récapitule : une table pour ${r.persons} personnes, ${r.date}, à ${r.time}. Je confirme ? Dites oui ou non.`); return; }
-    if (s === "r_confirm") {
-      if (/(oui|confirm|ok|exact|c'est ça|cest ca|parfait|valid)/.test(t)) {
-        const r = resvRef.current;
-        db.add({ id:"RES-"+uid(), client:"Assistant vocal", type:"reservation", items:[`Table pour ${r.persons} personnes`, `${r.date} à ${r.time}`], total:"—", time:now(), status:"en_cours", note:"Réservation prise par assistant vocal" });
-        setResv({}); resvRef.current = {}; setStep("intent"); stepRef.current = "intent";
-        botTurn("C'est noté, votre table est réservée. Souhaitez-vous autre chose ? Réserver, commander, ou poser une question ?");
-      } else if (/(non|modif|recommenc|change)/.test(t)) {
-        setResv({}); resvRef.current = {}; setStep("r_persons"); stepRef.current = "r_persons";
-        botTurn("Pas de problème, on recommence. Pour combien de personnes ?");
-      } else { botTurn("Dites oui pour confirmer, ou non pour recommencer."); }
-      return;
-    }
-
-    // ── Commande ──
-    if (s === "o_items") {
-      if (/(c'est tout|cest tout|rien d'autre|rien d autre|terminé|termine|voilà|voila|fini|c'est bon|cest bon|ce sera tout)/.test(t)) {
-        if (cartRef.current.length === 0) { botTurn("Votre commande est vide pour le moment. Quel plat souhaitez-vous ?"); return; }
-        setStep("o_confirm"); stepRef.current = "o_confirm";
-        botTurn(`Vous avez commandé : ${cartRef.current.join(", ")}. Je valide la commande ? Dites oui ou non.`); return;
-      }
-      const next = [...cartRef.current, txt];
-      setCart(next); cartRef.current = next;
-      botTurn(`J'ai noté ${txt}. Souhaitez-vous autre chose ? Sinon, dites "c'est tout".`);
-      return;
-    }
-    if (s === "o_confirm") {
-      if (/(oui|confirm|ok|valid|parfait|exact)/.test(t)) {
-        db.add({ id:"CMD-"+uid(), client:"Assistant vocal", type:"commande", items:cartRef.current.slice(), total:"—", time:now(), status:"en_cours", note:"Commande prise par assistant vocal" });
-        setCart([]); cartRef.current = []; setStep("intent"); stepRef.current = "intent";
-        botTurn("Parfait, votre commande est transmise en cuisine. Souhaitez-vous autre chose ?");
-      } else if (/(non|modif|ajout|recommenc|change)/.test(t)) {
-        setStep("o_items"); stepRef.current = "o_items";
-        botTurn("D'accord. Dites-moi le plat que vous souhaitez.");
-      } else { botTurn("Dites oui pour valider, ou non pour modifier la commande."); }
-      return;
-    }
-  }
-
-  const statusText = speaking ? "🔊 L'assistant parle…" : listening ? "🔴 Je vous écoute…" : active ? "…" : (step === "ended" ? "Conversation terminée" : "Appuyez pour démarrer");
-
-  return (
-    <div style={{ minHeight:"100vh", display:"flex", flexDirection:"column", maxWidth:480, margin:"0 auto" }}>
-      <TopBar title="🎙️ Assistant vocal" sub="Mains libres · il vous écoute et vous répond" onBack={() => { stopAll(); go("admin"); }} dot={BL} />
-      <div style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", padding:"24px 18px", gap:18 }}>
-        {!supported && (
-          <div style={{ background:"#EF444415", border:"1px solid #EF444445", borderRadius:14, padding:16, fontSize:13, color:"#FCA5A5", lineHeight:1.6, textAlign:"center" }}>
-            Votre navigateur ne supporte pas la reconnaissance vocale. Essayez avec Google Chrome.
-          </div>
-        )}
-
-        {/* Cercle micro animé */}
-        <div style={{ position:"relative", marginTop:6 }}>
-          {(listening || speaking) && <div style={{ position:"absolute", inset:0, borderRadius:"50%", background: speaking ? OR : BL, animation:"vpulse 1.4s ease-out infinite" }} />}
-          <div style={{ position:"relative", width:120, height:120, borderRadius:"50%", background: speaking ? `${OR}30` : listening ? BL : `${BL}25`, color:"#fff", fontSize:46, display:"flex", alignItems:"center", justifyContent:"center", boxShadow: (listening||speaking) ? `0 0 40px ${(speaking?OR:BL)}90` : `0 0 20px ${BL}40`, transition:"all .2s" }}>
-            {speaking ? "🔊" : "🎤"}
-          </div>
-        </div>
-        <div style={{ fontSize:14, color: speaking ? OR : listening ? BL : "#6B7280", fontWeight:700, minHeight:20 }}>{statusText}</div>
-
-        {/* Démarrer / Terminer */}
-        {!active && step !== "ended" && (
-          <button type="button" onClick={startConversation} style={{ padding:"15px 30px", borderRadius:14, background:BL, color:"#fff", border:"none", fontWeight:800, fontSize:15, cursor:"pointer", boxShadow:`0 5px 26px ${BL}55` }}>
-            ▶️ Démarrer la conversation
-          </button>
-        )}
-        {active && (
-          <div style={{ display:"flex", gap:8 }}>
-            <button type="button" onClick={() => { stopAll(); setActive(false); setListening(false); setSpeaking(false); setStep("ended"); stepRef.current = "ended"; }} style={{ padding:"11px 22px", borderRadius:14, background:"#EF4444", color:"#fff", border:"none", fontWeight:800, fontSize:14, cursor:"pointer" }}>⏹ Terminer</button>
-            {!listening && !speaking && (
-              <button type="button" onClick={beginListen} style={{ padding:"11px 18px", borderRadius:14, background:"#181824", color:"#E8EAF0", border:"1px solid #252836", fontWeight:700, fontSize:13, cursor:"pointer" }}>🎤 Reprendre l'écoute</button>
-            )}
-          </div>
-        )}
-
-        {/* Conversation */}
-        <div style={{ width:"100%", display:"flex", flexDirection:"column", gap:10, marginTop:4 }}>
-          {log.map((m, i) => (
-            <div key={i} className="fu" style={{ display:"flex", justifyContent: m.who === "usr" ? "flex-end" : "flex-start", gap:8 }}>
-              {m.who === "bot" && <div style={{ width:30, height:30, background:`${BL}25`, borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", fontSize:15, flexShrink:0, alignSelf:"flex-end" }}>🎙️</div>}
-              <div style={{ maxWidth:"82%", background: m.who === "usr" ? BL : "#111420", border: m.who === "bot" ? "1px solid #181824" : "none", borderRadius: m.who === "usr" ? "16px 16px 4px 16px" : "16px 16px 16px 4px", padding:"11px 14px", fontSize:14, lineHeight:1.7, color:"#E8EAF0" }}>{m.t}</div>
-            </div>
-          ))}
-          <div ref={logRef} />
-        </div>
-
-        {/* Panier en cours */}
-        {cart.length > 0 && (
-          <div className="fu" style={{ width:"100%", background:"#111420", border:`1px solid ${BL}45`, borderRadius:14, padding:"12px 16px" }}>
-            <div style={{ fontSize:11, fontWeight:700, color:BL, letterSpacing:1, marginBottom:8 }}>🛒 COMMANDE EN COURS</div>
-            {cart.map((c, i) => (<div key={i} style={{ fontSize:13, color:"#C8CAD0", marginBottom:4 }}>▸ {c}</div>))}
-          </div>
-        )}
-
-        {step === "ended" && (
-          <div className="fu" style={{ width:"100%", background:`${V}10`, border:`1px solid ${V}45`, borderRadius:14, padding:16, textAlign:"center" }}>
-            <div style={{ display:"flex", gap:8, justifyContent:"center" }}>
-              <button type="button" onClick={() => go("dashboard")} style={{ padding:"10px 20px", borderRadius:22, background:V, color:"#fff", border:"none", fontWeight:700, fontSize:13, cursor:"pointer", fontFamily:"inherit" }}>Voir la cuisine →</button>
-              <button type="button" onClick={startConversation} style={{ padding:"10px 20px", borderRadius:22, background:"#181824", color:"#E8EAF0", border:"1px solid #252836", fontWeight:700, fontSize:13, cursor:"pointer", fontFamily:"inherit" }}>Recommencer</button>
-            </div>
-          </div>
-        )}
-
-        <div style={{ marginTop:"auto", fontSize:11, color:"#555B6E", textAlign:"center", lineHeight:1.6, paddingTop:20 }}>
-          💡 Parlez après le bip sonore. L'assistant écoute tout seul.<br />Autorisez le micro et utilisez Google Chrome.
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ═════════════════════════════════════════════════════════════════════
-// SIMULATEUR
+// SIMULATEUR — appel manqué → SMS avec lien → chatbot
 // ═════════════════════════════════════════════════════════════════════
 function Simulator({ go, user }) {
   const [phase, setPhase] = useState("idle");
@@ -937,7 +632,7 @@ function Simulator({ go, user }) {
   const steps = [
     { l:"Appel entrant détecté", done:["ringing","missed","sms"].includes(phase) },
     { l:"Aucune réponse → appel manqué", done:["missed","sms"].includes(phase) },
-    { l:"SMS automatique envoyé en 3s", done:phase === "sms" },
+    { l:"SMS avec lien envoyé en 3s", done:phase === "sms" },
   ];
   return (
     <div style={{ minHeight:"100vh", display:"flex", flexDirection:"column", maxWidth:480, margin:"0 auto" }}>
@@ -956,9 +651,9 @@ function Simulator({ go, user }) {
         <div style={{ width:"100%", display:"flex", flexDirection:"column", gap:10 }}>
           {steps.map((s, i) => (<div key={i} style={{ display:"flex", alignItems:"center", gap:12, background: s.done ? `${V}0E` : "#111420", border:`1px solid ${s.done ? V+"45" : "#181824"}`, borderRadius:12, padding:"12px 16px" }}><span style={{ fontSize:18 }}>{s.done ? "✅" : "⬜"}</span><span style={{ fontSize:14, fontWeight:600, color: s.done ? V : "#6B7280" }}>{s.l}</span></div>))}
         </div>
-        {phase === "sms" && (<div className="fu" style={{ width:"100%", background:"#111420", border:`1px solid ${V}40`, borderRadius:16, padding:16 }}><div style={{ fontSize:10, fontWeight:700, color:V, letterSpacing:1.2, marginBottom:10 }}>SMS REÇU PAR LE CLIENT</div><div style={{ background:"#0E0F17", borderRadius:"16px 16px 16px 4px", padding:"13px 16px", fontSize:14, lineHeight:1.8, color:"#E8EAF0", border:"1px solid #181824" }}>Bonjour ! Nous n'avons pas pu répondre à votre appel. Cliquez ici 👉 <span onClick={() => go("chatbot")} style={{ color:R, textDecoration:"underline", cursor:"pointer", fontWeight:700 }}>Ouvrir le chatbot →</span></div></div>)}
+        {phase === "sms" && (<div className="fu" style={{ width:"100%", background:"#111420", border:`1px solid ${V}40`, borderRadius:16, padding:16 }}><div style={{ fontSize:10, fontWeight:700, color:V, letterSpacing:1.2, marginBottom:10 }}>SMS REÇU PAR LE CLIENT</div><div style={{ background:"#0E0F17", borderRadius:"16px 16px 16px 4px", padding:"13px 16px", fontSize:14, lineHeight:1.8, color:"#E8EAF0", border:"1px solid #181824" }}>Bonjour ! Nous n'avons pas pu répondre à votre appel. Cliquez ici pour commander ou réserver 👉 <span onClick={() => go("chatbot")} style={{ color:R, textDecoration:"underline", cursor:"pointer", fontWeight:700 }}>Ouvrir le chatbot →</span></div></div>)}
         {phase === "idle" && <PrimaryBtn lg full onClick={start}>📞 Simuler un appel manqué</PrimaryBtn>}
-        {phase === "sms" && (<><PrimaryBtn lg full onClick={() => go("chatbot")}>💬 Voir ce que reçoit le client →</PrimaryBtn><GhostBtn full onClick={() => setPhase("idle")}>Recommencer</GhostBtn></>)}
+        {phase === "sms" && (<><PrimaryBtn lg full onClick={() => go("chatbot")}>💬 Cliquer sur le lien (voir le chatbot) →</PrimaryBtn><GhostBtn full onClick={() => setPhase("idle")}>Recommencer</GhostBtn></>)}
       </div>
     </div>
   );
