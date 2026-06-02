@@ -76,7 +76,7 @@ const I = { width: "100%", background: "#0E0F17", border: "1.5px solid #252836",
 // ROOT
 // ═════════════════════════════════════════════════════════════════════
 export default function AdBarth() {
-  const [page, setPage] = useState("login");
+  const [page, setPage] = useState("landing");
   const [plan, setPlan] = useState(null);
   const [user, setUser] = useState(null);
   const [orders, setOrders] = useState([]);
@@ -195,6 +195,9 @@ function Landing({ go }) {
         </div>
         <p className="fu" style={{ fontSize:13, color:"#555B6E", animationDelay:".4s" }}>
           <strong style={{ color:"#E8EAF0" }}>À partir de 29€/mois</strong> · Sans engagement · Installation en 15 min
+        </p>
+        <p className="fu" style={{ fontSize:13, color:"#9CA3AF", animationDelay:".45s", marginTop:14 }}>
+          Déjà un compte ? <span onClick={() => go("login")} style={{ color:R, fontWeight:700, cursor:"pointer" }}>Se connecter →</span>
         </p>
         <div className="fu" style={{ display:"flex", alignItems:"center", flexWrap:"wrap", justifyContent:"center", marginTop:60, animationDelay:".5s" }}>
           {[
@@ -333,7 +336,7 @@ function Landing({ go }) {
 function Pricing({ go, onPick }) {
   return (
     <div style={{ minHeight:"100vh", paddingBottom:60 }}>
-      <StepNav title="Choisissez votre plan" onBack={() => go("login")} step={1} of={2} />
+      <StepNav title="Choisissez votre plan" onBack={() => go("landing")} step={1} of={2} />
       <div style={{ padding:"40px 20px", maxWidth:960, margin:"0 auto" }}>
         <div style={{ textAlign:"center", marginBottom:48 }}>
           <h2 style={{ fontFamily:"'Syne',sans-serif", fontSize:"clamp(22px,3.5vw,40px)", fontWeight:900, letterSpacing:"-1px", marginBottom:12 }}>Simple. Transparent. Sans surprise.</h2>
@@ -356,6 +359,9 @@ function Pricing({ go, onPick }) {
             </div>
           ))}
         </div>
+        <p style={{ textAlign:"center", fontSize:13, color:"#9CA3AF", marginTop:30 }}>
+          Déjà un compte ? <span onClick={() => go("login")} style={{ color:R, fontWeight:700, cursor:"pointer" }}>Se connecter →</span>
+        </p>
       </div>
     </div>
   );
