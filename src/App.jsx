@@ -170,7 +170,7 @@ export default function AdBarth() {
       {page === "landing" && <Landing go={go} />}
       {page === "pricing" && <Pricing go={go} onPick={p => { setPlan(p); go("signup"); }} />}
       {page === "signup" && <Signup go={go} plan={plan} onLogged={applySession} />}
-      {page === "admin" && <Admin user={user} go={go} onLogout={logout} />}
+      {page === "admin" && <Admin user={user} go={go} onLogout={logout} orders={orders} />}
       {page === "simulator" && <Simulator go={go} user={user} />}
       {page === "chatbot" && <Chatbot go={go} user={user} restoId={publicResto || user?.id} isPublic={!!publicResto} />}
       {page === "dashboard" && <Dashboard go={go} orders={orders} user={user} />}
@@ -554,7 +554,7 @@ function Signup({ go, plan, onLogged }) {
 // ═════════════════════════════════════════════════════════════════════
 // ADMIN
 // ═════════════════════════════════════════════════════════════════════
-function Admin({ user, go, onLogout }) {
+function Admin({ user, go, onLogout, orders = [] }) {
   const planName = (PLANS.find(p => p.key === user?.plan) || PLANS[0]).name;
   const planPrice = (PLANS.find(p => p.key === user?.plan) || PLANS[0]).price;
   const [tab, setTab] = useState("infos");
@@ -587,6 +587,10 @@ function Admin({ user, go, onLogout }) {
   }, []);
   const accent = cfg.color;
   const publicLink = (typeof window !== "undefined" && user?.id) ? `${window.location.origin}/?r=${user.id}` : "";
+  useEffect(() => { if (tab === "stats") db.reload(); }, [tab]);
+  const cmdList = orders.filter(o => o.type === "commande");
+  const resList = orders.filter(o => o.type === "reservation");
+  const ca = cmdList.reduce((s, o) => s + (parseFloat(String(o.total).replace(/[^\d.,]/g, "").replace(",", ".")) || 0), 0);
   async function save() {
     try {
       if (user?.id) await supabase.from("comptes").update({ config: cfg, menu, cats }).eq("id", user.id);
@@ -773,8 +777,9 @@ function Admin({ user, go, onLogout }) {
         {tab === "stats" && <>
           <STitle>Statistiques du mois</STitle>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
-            {[{ l:"SMS envoyés", v:"0", i:"💬" },{ l:"Clics chatbot", v:"0", i:"👆" },{ l:"Commandes", v:"0", i:"🍔" },{ l:"Réservations", v:"0", i:"📅" },{ l:"CA récupéré", v:"0€", i:"💰" },{ l:"Taux conversion", v:"—", i:"📈" }].map(s => (<div key={s.l} style={{ background:"#111420", border:"1px solid #181824", borderRadius:16, padding:"18px 16px" }}><div style={{ fontSize:22, marginBottom:8 }}>{s.i}</div><div style={{ fontFamily:"'Syne',sans-serif", fontSize:28, fontWeight:900, color:accent, lineHeight:1 }}>{s.v}</div><div style={{ fontSize:11, color:"#6B7280", marginTop:7, fontWeight:600 }}>{s.l}</div></div>))}
+            {[{ l:"Commandes", v:String(cmdList.length), i:"🍔" },{ l:"Réservations", v:String(resList.length), i:"📅" },{ l:"CA commandes", v:`${ca.toFixed(2).replace(".", ",")}€`, i:"💰" },{ l:"Total reçus", v:String(orders.length), i:"📈" },{ l:"SMS envoyés", v:"—", i:"💬" },{ l:"Clics chatbot", v:"—", i:"👆" }].map(s => (<div key={s.l} style={{ background:"#111420", border:"1px solid #181824", borderRadius:16, padding:"18px 16px" }}><div style={{ fontSize:22, marginBottom:8 }}>{s.i}</div><div style={{ fontFamily:"'Syne',sans-serif", fontSize:28, fontWeight:900, color:accent, lineHeight:1 }}>{s.v}</div><div style={{ fontSize:11, color:"#6B7280", marginTop:7, fontWeight:600 }}>{s.l}</div></div>))}
           </div>
+          <p style={{ fontSize:11, color:"#555B6E", textAlign:"center", lineHeight:1.6 }}>« SMS envoyés » et « Clics » s'afficheront quand le vrai système SMS sera branché.</p>
           <div style={{ background:"#111420", border:"1px solid #181824", borderRadius:16, padding:20, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
             <div><div style={{ fontSize:16, fontWeight:800 }}>Plan {planName}</div><div style={{ fontSize:12, color:"#6B7280", marginTop:3 }}>Abonnement actif · Renouvellement mensuel</div></div>
             <div style={{ fontFamily:"'Syne',sans-serif", fontSize:22, fontWeight:900, color:accent }}>{planPrice.toFixed(2).replace(".", ",")}€<span style={{ fontSize:12, color:"#6B7280", fontWeight:600 }}>/mois</span></div>
