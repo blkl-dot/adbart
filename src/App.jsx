@@ -82,6 +82,17 @@ const db = {
     _orders = _orders.map(o => o.id === id ? { ...o, status: s } : o); notify();
     await supabase.from("commandes").update({ status: s }).eq("ref", id).eq("compte_id", _userId);
   },
+  subscribeRealtime: onNew => {
+    if (!_userId) return () => {};
+    const channel = supabase
+      .channel("commandes-" + _userId)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "commandes", filter: `compte_id=eq.${_userId}` }, () => {
+        loadOrders();
+        if (onNew) onNew();
+      })
+      .subscribe();
+    return () => { try { supabase.removeChannel(channel); } catch (e) {} };
+  },
 };
 const uid = () => String(Date.now()).slice(-4);
 const now = () => new Date().toLocaleTimeString("fr-FR", { hour:"2-digit", minute:"2-digit" });
@@ -119,13 +130,17 @@ export default function AdBarth() {
   const [publicResto, setPublicResto] = useState(null);
   useEffect(() => db.sub(setOrders), []);
   useEffect(() => {
-    const rid = new URLSearchParams(window.location.search).get("r");
+    const params = new URLSearchParams(window.location.search);
+    const rid = params.get("r");
     if (rid) { setPublicResto(rid); setUserId(rid); setPage("chatbot"); setReady(true); return; }
+    const isRecovery = window.location.hash.includes("type=recovery") || params.get("type") === "recovery";
     supabase.auth.getSession().then(({ data }) => {
+      if (isRecovery) { setPage("reset"); setReady(true); return; }
       if (data?.session?.user) applySession(data.session.user);
       setReady(true);
     });
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "PASSWORD_RECOVERY") { setPage("reset"); setReady(true); return; }
       if (session?.user) applySession(session.user);
       else { setUserId(null); setUser(null); db.reload(); }
     });
@@ -151,6 +166,7 @@ export default function AdBarth() {
     <><style>{CSS}</style>
     <div style={{ minHeight:"100vh", background:"#09090F", color:"#E8EAF0", fontFamily:"'DM Sans',sans-serif" }}>
       {page === "login" && <Login go={go} onLogged={applySession} />}
+      {page === "reset" && <Reset go={go} onLogged={applySession} />}
       {page === "landing" && <Landing go={go} />}
       {page === "pricing" && <Pricing go={go} onPick={p => { setPlan(p); go("signup"); }} />}
       {page === "signup" && <Signup go={go} plan={plan} onLogged={applySession} />}
@@ -166,9 +182,11 @@ export default function AdBarth() {
 // LOGIN
 // ═════════════════════════════════════════════════════════════════════
 function Login({ go, onLogged }) {
+  const [mode, setMode] = useState("login");
   const [email, setEmail] = useState("");
   const [pass, setPass] = useState("");
   const [err, setErr] = useState("");
+  const [msg, setMsg] = useState("");
   const [loading, setLoading] = useState(false);
   async function submit(e) {
     e.preventDefault(); setErr(""); setLoading(true);
@@ -177,25 +195,91 @@ function Login({ go, onLogged }) {
     if (error) { setErr("Email ou mot de passe incorrect."); return; }
     if (data?.user) onLogged(data.user);
   }
+  async function sendReset(e) {
+    e.preventDefault(); setErr(""); setMsg("");
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) { setErr("Entrez une adresse email valide."); return; }
+    setLoading(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: window.location.origin });
+    setLoading(false);
+    if (error) { setErr(error.message || "Erreur lors de l'envoi."); return; }
+    setMsg("Si un compte existe pour cet email, un lien de réinitialisation vient d'être envoyé. Vérifiez votre boîte mail.");
+  }
   return (
     <div style={{ minHeight:"100vh", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:24 }}>
       <div style={{ marginBottom:30 }}><Logo size={28} /></div>
       <div style={{ width:"100%", maxWidth:380, background:"#111420", border:"1px solid #181824", borderRadius:20, padding:28 }}>
-        <h2 style={{ fontFamily:"'Syne',sans-serif", fontSize:24, fontWeight:900, marginBottom:6, color:"#fff" }}>Connexion</h2>
-        <p style={{ fontSize:13, color:"#6B7280", marginBottom:24 }}>Accédez à votre espace restaurateur.</p>
+        {mode === "login" ? <>
+          <h2 style={{ fontFamily:"'Syne',sans-serif", fontSize:24, fontWeight:900, marginBottom:6, color:"#fff" }}>Connexion</h2>
+          <p style={{ fontSize:13, color:"#6B7280", marginBottom:24 }}>Accédez à votre espace restaurateur.</p>
+          <form onSubmit={submit} style={{ display:"flex", flexDirection:"column", gap:14 }}>
+            <Field l="Email"><input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="vous@restaurant.fr" style={I} /></Field>
+            <Field l="Mot de passe"><input type="password" value={pass} onChange={e => setPass(e.target.value)} placeholder="••••••••" style={I} /></Field>
+            {err && <div style={{ color:"#EF4444", fontSize:13, textAlign:"center" }}>{err}</div>}
+            <button type="submit" disabled={loading} style={{ padding:"15px", borderRadius:12, background: loading ? "#252836" : R, color:"#fff", border:"none", fontWeight:800, fontSize:15, cursor: loading ? "not-allowed" : "pointer", marginTop:4, display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}>
+              {loading ? <><Spinner /> Connexion…</> : "Se connecter →"}
+            </button>
+          </form>
+          <p style={{ textAlign:"center", marginTop:14 }}><span onClick={() => { setMode("forgot"); setErr(""); setMsg(""); }} style={{ fontSize:13, color:"#9CA3AF", cursor:"pointer" }}>Mot de passe oublié ?</span></p>
+          <div style={{ borderTop:"1px solid #181824", marginTop:18, paddingTop:18, textAlign:"center" }}>
+            <p style={{ fontSize:13, color:"#6B7280" }}>Pas encore de compte ?</p>
+            <span onClick={() => go("pricing")} style={{ fontSize:13, color:R, fontWeight:700, cursor:"pointer" }}>Créer un compte →</span>
+            <span onClick={() => go("landing")} style={{ display:"block", marginTop:8, fontSize:12, color:"#555B6E", cursor:"pointer" }}>Découvrir AdBarth</span>
+          </div>
+        </> : <>
+          <h2 style={{ fontFamily:"'Syne',sans-serif", fontSize:24, fontWeight:900, marginBottom:6, color:"#fff" }}>Mot de passe oublié</h2>
+          <p style={{ fontSize:13, color:"#6B7280", marginBottom:24 }}>Entrez votre email, nous vous enverrons un lien pour le réinitialiser.</p>
+          <form onSubmit={sendReset} style={{ display:"flex", flexDirection:"column", gap:14 }}>
+            <Field l="Email"><input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="vous@restaurant.fr" style={I} /></Field>
+            {err && <div style={{ color:"#EF4444", fontSize:13, textAlign:"center" }}>{err}</div>}
+            {msg && <div style={{ color:V, fontSize:13, textAlign:"center", lineHeight:1.6 }}>{msg}</div>}
+            <button type="submit" disabled={loading} style={{ padding:"15px", borderRadius:12, background: loading ? "#252836" : R, color:"#fff", border:"none", fontWeight:800, fontSize:15, cursor: loading ? "not-allowed" : "pointer", marginTop:4, display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}>
+              {loading ? <><Spinner /> Envoi…</> : "Envoyer le lien →"}
+            </button>
+          </form>
+          <p style={{ textAlign:"center", marginTop:16 }}><span onClick={() => { setMode("login"); setErr(""); setMsg(""); }} style={{ fontSize:13, color:R, fontWeight:700, cursor:"pointer" }}>← Retour à la connexion</span></p>
+        </>}
+      </div>
+    </div>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════
+// RÉINITIALISATION DU MOT DE PASSE (lien reçu par email)
+// ═════════════════════════════════════════════════════════════════════
+function Reset({ go, onLogged }) {
+  const [pass, setPass] = useState("");
+  const [pass2, setPass2] = useState("");
+  const [err, setErr] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [okMsg, setOkMsg] = useState("");
+  useEffect(() => { try { window.history.replaceState({}, "", window.location.pathname); } catch (e) {} }, []);
+  async function submit(e) {
+    e.preventDefault(); setErr("");
+    if (pass.length < 6) { setErr("Mot de passe trop court (6 caractères minimum)."); return; }
+    if (pass !== pass2) { setErr("Les mots de passe ne correspondent pas."); return; }
+    setLoading(true);
+    const { error } = await supabase.auth.updateUser({ password: pass });
+    if (error) { setLoading(false); setErr(error.message || "Le lien a peut-être expiré. Recommencez."); return; }
+    const { data } = await supabase.auth.getUser();
+    setLoading(false); setOkMsg("Mot de passe mis à jour ✓");
+    if (data?.user) setTimeout(() => onLogged(data.user), 900);
+  }
+  return (
+    <div style={{ minHeight:"100vh", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:24 }}>
+      <div style={{ marginBottom:30 }}><Logo size={28} /></div>
+      <div style={{ width:"100%", maxWidth:380, background:"#111420", border:"1px solid #181824", borderRadius:20, padding:28 }}>
+        <h2 style={{ fontFamily:"'Syne',sans-serif", fontSize:24, fontWeight:900, marginBottom:6, color:"#fff" }}>Nouveau mot de passe</h2>
+        <p style={{ fontSize:13, color:"#6B7280", marginBottom:24 }}>Choisissez un nouveau mot de passe pour votre compte.</p>
         <form onSubmit={submit} style={{ display:"flex", flexDirection:"column", gap:14 }}>
-          <Field l="Email"><input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="vous@restaurant.fr" style={I} /></Field>
-          <Field l="Mot de passe"><input type="password" value={pass} onChange={e => setPass(e.target.value)} placeholder="••••••••" style={I} /></Field>
+          <Field l="Nouveau mot de passe"><input type="password" value={pass} onChange={e => setPass(e.target.value)} placeholder="•••••••• (6 min)" style={I} /></Field>
+          <Field l="Confirmer le mot de passe"><input type="password" value={pass2} onChange={e => setPass2(e.target.value)} placeholder="••••••••" style={I} /></Field>
           {err && <div style={{ color:"#EF4444", fontSize:13, textAlign:"center" }}>{err}</div>}
-          <button type="submit" disabled={loading} style={{ padding:"15px", borderRadius:12, background: loading ? "#252836" : R, color:"#fff", border:"none", fontWeight:800, fontSize:15, cursor: loading ? "not-allowed" : "pointer", marginTop:4, display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}>
-            {loading ? <><Spinner /> Connexion…</> : "Se connecter →"}
+          {okMsg && <div style={{ color:V, fontSize:13, textAlign:"center", fontWeight:700 }}>{okMsg}</div>}
+          <button type="submit" disabled={loading || !!okMsg} style={{ padding:"15px", borderRadius:12, background: (loading || okMsg) ? "#252836" : R, color:"#fff", border:"none", fontWeight:800, fontSize:15, cursor: (loading || okMsg) ? "not-allowed" : "pointer", marginTop:4, display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}>
+            {loading ? <><Spinner /> Mise à jour…</> : okMsg ? "Redirection…" : "Mettre à jour →"}
           </button>
         </form>
-        <div style={{ borderTop:"1px solid #181824", marginTop:22, paddingTop:18, textAlign:"center" }}>
-          <p style={{ fontSize:13, color:"#6B7280" }}>Pas encore de compte ?</p>
-          <span onClick={() => go("pricing")} style={{ fontSize:13, color:R, fontWeight:700, cursor:"pointer" }}>Créer un compte →</span>
-          <span onClick={() => go("landing")} style={{ display:"block", marginTop:8, fontSize:12, color:"#555B6E", cursor:"pointer" }}>Découvrir AdBarth</span>
-        </div>
+        <p style={{ textAlign:"center", marginTop:16 }}><span onClick={() => go("login")} style={{ fontSize:13, color:"#9CA3AF", cursor:"pointer" }}>← Annuler</span></p>
       </div>
     </div>
   );
@@ -965,11 +1049,53 @@ function Chatbot({ go, user, restoId, isPublic }) {
 // ═════════════════════════════════════════════════════════════════════
 function Dashboard({ go, orders, user }) {
   const [filter, setFilter] = useState("en_cours");
+  const [soundOn, setSoundOn] = useState(true);
+  const [flash, setFlash] = useState(false);
+  const soundRef = useRef(true);
+  const audioRef = useRef(null);
+  useEffect(() => { soundRef.current = soundOn; }, [soundOn]);
+
+  function ensureAudio() {
+    try {
+      if (!audioRef.current) audioRef.current = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioRef.current.state === "suspended") audioRef.current.resume();
+    } catch (e) {}
+  }
+  function beep() {
+    try {
+      ensureAudio();
+      const ctx = audioRef.current; if (!ctx) return;
+      [[880, 0], [1100, 0.22]].forEach(([freq, t]) => {
+        const o = ctx.createOscillator(), g = ctx.createGain();
+        o.connect(g); g.connect(ctx.destination); o.type = "sine"; o.frequency.value = freq;
+        const start = ctx.currentTime + t;
+        g.gain.setValueAtTime(0.0001, start);
+        g.gain.exponentialRampToValueAtTime(0.35, start + 0.03);
+        g.gain.exponentialRampToValueAtTime(0.0001, start + 0.38);
+        o.start(start); o.stop(start + 0.4);
+      });
+    } catch (e) {}
+  }
+
+  // Temps réel : nouvelle commande → mise à jour + bip + flash
+  useEffect(() => {
+    const off = db.subscribeRealtime(() => {
+      if (soundRef.current) beep();
+      setFlash(true); setTimeout(() => setFlash(false), 3500);
+    });
+    return off;
+  }, []);
+
   const list = orders.filter(o => filter === "all" ? true : o.status === filter);
   const nb = orders.filter(o => o.status === "en_cours").length;
   return (
     <div style={{ minHeight:"100vh", display:"flex", flexDirection:"column", maxWidth:520, margin:"0 auto" }}>
       <TopBar title="Commandes en cours" onBack={() => go("admin")} badge={nb} />
+      {flash && (<div className="fu" style={{ background:`${V}18`, borderBottom:`1px solid ${V}55`, padding:"10px 16px", textAlign:"center", fontSize:14, fontWeight:800, color:V }}>🔔 Nouvelle commande reçue !</div>)}
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"8px 14px", background:"#09090F", borderBottom:"1px solid #181824" }}>
+        <span style={{ fontSize:11, color:"#6B7280", display:"flex", alignItems:"center", gap:6 }}><span style={{ width:7, height:7, borderRadius:"50%", background:V, display:"inline-block", animation:"blink 1.6s infinite" }} />En direct</span>
+        <button type="button" onClick={() => { ensureAudio(); setSoundOn(s => !s); }} style={{ padding:"6px 12px", borderRadius:20, background: soundOn ? `${V}18` : "#181824", border:`1px solid ${soundOn ? V+"55" : "#252836"}`, color: soundOn ? V : "#9CA3AF", fontSize:12, fontWeight:700, cursor:"pointer" }}>{soundOn ? "🔔 Son activé" : "🔕 Son coupé"}</button>
+      </div>
       <div style={{ display:"flex", background:"#09090F", borderBottom:"1px solid #181824", padding:"0 12px" }}>
         {[{ k:"en_cours", l:"⏳ En cours" }, { k:"pret", l:"✅ Prêt" }, { k:"all", l:"📋 Tout" }].map(t => (<button key={t.k} type="button" onClick={() => setFilter(t.k)} style={{ flex:1, padding:"12px 4px", background:"none", border:"none", borderBottom: filter === t.k ? `2px solid ${R}` : "2px solid transparent", color: filter === t.k ? R : "#6B7280", fontSize:13, fontWeight:700, cursor:"pointer", fontFamily:"inherit" }}>{t.l}</button>))}
       </div>
