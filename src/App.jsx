@@ -7,6 +7,32 @@ const OR = "#F5A623";
 const V = "#22C55E";
 const EMOJIS = ["🍔","🍕","🌮","🌯","🫓","🍗","🌭","🍟","🍝","🥗","🍣","🥙","🍜","🥘","🥩","🍖","🍮","🧁","🍰","🥤","🧃","☕","🍵","🍺","🥂","🍷"];
 
+// ── Sécurité / anti-abus : limites et nettoyage des entrées ──
+const LIMITS = {
+  persons: { min: 1, max: 30 },   // réservation : nb de personnes
+  qty:     { min: 1, max: 20 },   // quantité par article
+  itemsMax: 40,                   // nb max d'articles dans une commande
+  text:    120,                   // longueur max d'un champ texte court
+  note:    300,                   // longueur max d'une note / commentaire
+  price:   { min: 0, max: 1000 }, // prix d'un plat (€)
+};
+// Force un entier dans une plage [min,max] ; renvoie null si non valide
+function clampInt(v, min, max) {
+  const n = parseInt(String(v).replace(/[^\d]/g, ""), 10);
+  if (isNaN(n)) return null;
+  return Math.min(max, Math.max(min, n));
+}
+// Nettoie un texte : retire < > (anti-injection), coupe à la longueur max
+function sanitizeText(s, max = LIMITS.text) {
+  return String(s || "").replace(/[<>]/g, "").slice(0, max).trim();
+}
+// Valide un prix : nombre positif, max 1000 €, arrondi au centime ; null si invalide
+function validPrice(v) {
+  const n = parseFloat(String(v).replace(",", "."));
+  if (isNaN(n) || n < LIMITS.price.min || n > LIMITS.price.max) return null;
+  return Math.round(n * 100) / 100;
+}
+
 // ── Plans (tous incluent : SMS appel manqué + lien + chatbot + cuisine) ──
 const PLANS = [
   { key:"starter", name:"Starter", price:29.90, features:["SMS automatique sur appel manqué","Lien de commande envoyé par SMS","Chatbot commande + réservation","Dashboard cuisine temps réel","Jusqu'à 100 SMS/mois"], missing:["SMS illimités","Installation faite par un technicien"] },
@@ -39,8 +65,17 @@ const db = {
   sub: fn => { _subs.push(fn); loadOrders(); return () => { _subs = _subs.filter(s => s !== fn); }; },
   reload: () => loadOrders(),
   add: async o => {
-    _orders = [o, ..._orders]; notify();
-    await supabase.from("commandes").insert({ compte_id: _userId, ref: o.id, type: o.type, client: o.client, items: o.items, total: o.total, note: o.note || "", status: o.status });
+    // Couche défensive : on nettoie et on plafonne TOUT avant d'écrire
+    const safe = {
+      ...o,
+      client: sanitizeText(o.client, 40),
+      items: (Array.isArray(o.items) ? o.items : []).slice(0, LIMITS.itemsMax).map(it => sanitizeText(it, 80)),
+      total: sanitizeText(o.total, 16),
+      note: sanitizeText(o.note, LIMITS.note),
+      status: ["en_cours", "pret", "termine"].includes(o.status) ? o.status : "en_cours",
+    };
+    _orders = [safe, ..._orders]; notify();
+    await supabase.from("commandes").insert({ compte_id: _userId, ref: safe.id, type: safe.type, client: safe.client, items: safe.items, total: safe.total, note: safe.note, status: safe.status });
     loadOrders();
   },
   upd: async (id, s) => {
@@ -385,7 +420,7 @@ function Signup({ go, plan, onLogged }) {
     setErr(""); setLoading(true);
     const { data, error } = await supabase.auth.signUp({
       email: f.email.trim(), password: f.pass,
-      options: { data: { nom: f.name, resto: f.resto, telephone: f.phone, plan: chosenPlan.key } },
+      options: { data: { nom: sanitizeText(f.name, 60), resto: sanitizeText(f.resto, 60), telephone: sanitizeText(f.phone, 20), plan: chosenPlan.key } },
     });
     setLoading(false);
     if (error) {
@@ -454,8 +489,11 @@ function Admin({ user, go, onLogout }) {
   function save() { setSaved(true); setToast("✓ Modifications sauvegardées"); setTimeout(() => { setSaved(false); setToast(""); }, 2600); }
   function addItem() {
     if (!form.name || !form.price || !form.cat) return;
-    if (editId !== null) { setMenu(m => m.map(i => i.id === editId ? { ...form, id:editId, on:true } : i)); setEditId(null); }
-    else { setMenu(m => [...m, { ...form, id: uid(), on:true }]); }
+    const price = validPrice(form.price);
+    if (price === null) { setToast("⚠️ Prix invalide (entre 0 et 1000 €)"); setTimeout(() => setToast(""), 2800); return; }
+    const clean = { ...form, name: sanitizeText(form.name, 60), desc: sanitizeText(form.desc, LIMITS.text), price: String(price) };
+    if (editId !== null) { setMenu(m => m.map(i => i.id === editId ? { ...clean, id:editId, on:true } : i)); setEditId(null); }
+    else { setMenu(m => [...m, { ...clean, id: uid(), on:true }]); }
     setForm({ cat:form.cat, name:"", price:"", emoji:"🍔", desc:"" });
   }
   function startEdit(item) {
@@ -532,7 +570,7 @@ function Admin({ user, go, onLogout }) {
             <p style={{ fontSize:12, color:"#555B6E" }}>{"{lien}"} = lien cliquable qui ouvre votre chatbot</p>
           </Card>
           <Card>
-            <Field l="Message SMS envoyé au client"><textarea value={cfg.sms} onChange={e => setCfg(c => ({ ...c, sms:e.target.value }))} rows={4} style={{ ...I, resize:"none", lineHeight:1.7 }} /></Field>
+            <Field l="Message SMS envoyé au client"><textarea value={cfg.sms} onChange={e => setCfg(c => ({ ...c, sms:e.target.value }))} rows={4} maxLength={320} style={{ ...I, resize:"none", lineHeight:1.7 }} /></Field>
           </Card>
           <Card>
             <div style={{ fontSize:11, fontWeight:700, color:"#6B7280", letterSpacing:1, marginBottom:12 }}>APERÇU SMS REÇU PAR LE CLIENT</div>
@@ -546,7 +584,7 @@ function Admin({ user, go, onLogout }) {
         {tab === "chatbot" && <>
           <STitle>Configuration du chatbot client</STitle>
           <Card>
-            <Field l="Message d'accueil"><textarea value={cfg.welcome} onChange={e => setCfg(c => ({ ...c, welcome:e.target.value }))} rows={3} style={{ ...I, resize:"none", lineHeight:1.7 }} /></Field>
+            <Field l="Message d'accueil"><textarea value={cfg.welcome} onChange={e => setCfg(c => ({ ...c, welcome:e.target.value }))} rows={3} maxLength={200} style={{ ...I, resize:"none", lineHeight:1.7 }} /></Field>
           </Card>
           <Card>
             <div style={{ fontSize:13, fontWeight:700, marginBottom:14 }}>Fonctionnalités activées</div>
@@ -581,9 +619,9 @@ function Admin({ user, go, onLogout }) {
             <Field l="Catégorie">
               <select value={form.cat} onChange={e => setForm(f => ({ ...f, cat:e.target.value }))} style={I}><option value="">Choisir une catégorie…</option>{cats.map(c => <option key={c} value={c}>{c}</option>)}</select>
             </Field>
-            <Field l="Nom du plat"><input value={form.name} onChange={e => setForm(f => ({ ...f, name:e.target.value }))} placeholder="ex: Magret de canard" style={I} /></Field>
-            <Field l="Prix (€)"><input value={form.price} onChange={e => setForm(f => ({ ...f, price:e.target.value }))} placeholder="ex: 18.50" type="number" step="0.01" min="0" style={I} /></Field>
-            <Field l="Description (optionnel)"><input value={form.desc} onChange={e => setForm(f => ({ ...f, desc:e.target.value }))} placeholder="ex: Pommes sarladaises" style={I} /></Field>
+            <Field l="Nom du plat"><input value={form.name} onChange={e => setForm(f => ({ ...f, name:e.target.value }))} placeholder="ex: Magret de canard" maxLength={60} style={I} /></Field>
+            <Field l="Prix (€)"><input value={form.price} onChange={e => setForm(f => ({ ...f, price:e.target.value }))} placeholder="ex: 18.50" type="number" step="0.01" min="0" max="1000" style={I} /></Field>
+            <Field l="Description (optionnel)"><input value={form.desc} onChange={e => setForm(f => ({ ...f, desc:e.target.value }))} placeholder="ex: Pommes sarladaises" maxLength={120} style={I} /></Field>
             <div style={{ display:"flex", gap:10 }}>
               <button type="button" onClick={addItem} style={{ flex:1, padding:"12px", borderRadius:12, background:accent, color:"#fff", border:"none", fontWeight:700, fontSize:14, cursor:"pointer" }}>{editId !== null ? "✓ Mettre à jour" : "➕ Ajouter au menu"}</button>
               {editId !== null && (<button type="button" onClick={() => { setEditId(null); setForm({ cat:"", name:"", price:"", emoji:"🍔", desc:"" }); }} style={{ padding:"12px 14px", borderRadius:12, background:"#181824", color:"#9CA3AF", border:"1px solid #252836", fontWeight:700, fontSize:13, cursor:"pointer" }}>Annuler</button>)}
@@ -699,15 +737,17 @@ function Chatbot({ go, user }) {
     }
     if (flow === "order_cat") { bot("Nos plats arrivent bientôt ! En attendant, appelez-nous pour commander. 🙏", 500); setFlow("intent"); return; }
     if (flow === "resv_persons") {
-      const n = txt.match(/\d+/);
-      if (n) { setResv(r => ({ ...r, persons:n[0] })); setFlow("resv_date"); bot(`Parfait, table pour ${n[0]} 👍\nPour quelle date ? (ex: ce soir, demain…)`, 500); }
+      const num = clampInt(txt, LIMITS.persons.min, LIMITS.persons.max);
+      const raw = parseInt(String(txt).replace(/[^\d]/g, ""), 10);
+      if (!isNaN(raw) && raw > LIMITS.persons.max) { bot(`Pour un groupe de plus de ${LIMITS.persons.max} personnes, merci d'appeler directement le restaurant 🙏`, 450); return; }
+      if (num) { setResv(r => ({ ...r, persons:num })); setFlow("resv_date"); bot(`Parfait, table pour ${num} 👍\nPour quelle date ? (ex: ce soir, demain…)`, 500); }
       else { bot("Combien de personnes serez-vous ? (ex: 2, 4…)", 400); }
       return;
     }
     if (flow === "resv_date") { setResv(r => ({ ...r, date:txt })); setFlow("resv_time"); bot("À quelle heure souhaitez-vous venir ?", 500); return; }
     if (flow === "resv_time") { setResv(r => ({ ...r, time:txt })); setFlow("resv_note"); bot("Une note ? (allergie, occasion…) Ou tapez \"non\".", 500); return; }
     if (flow === "resv_note") {
-      const note = (t === "non" || t === "rien") ? "" : txt;
+      const note = (t === "non" || t === "rien") ? "" : sanitizeText(txt, LIMITS.note);
       const r2 = { ...resv, note }; setResv(r2); setFlow("resv_confirm");
       setTimeout(() => bot(`Récapitulatif :\n\n📅 ${r2.date} à ${r2.time}\n👥 ${r2.persons} personne${r2.persons > 1 ? "s" : ""}${r2.note ? "\n📝 " + r2.note : ""}\n\nTout est correct ?`, 500), 0);
       return;
@@ -746,7 +786,7 @@ function Chatbot({ go, user }) {
       </div>
       {curQR.length > 0 && !done && !showCats && (<div style={{ padding:"8px 14px", display:"flex", gap:8, overflowX:"auto", borderTop:"1px solid #181824", background:"#09090F" }}>{curQR.map(r => (<button key={r} type="button" onClick={() => q(r)} style={{ flexShrink:0, padding:"8px 14px", borderRadius:22, background:"#111420", border:`1px solid ${R}50`, color:R, fontSize:13, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap", fontFamily:"inherit" }}>{r}</button>))}</div>)}
       <div style={{ padding:"10px 14px 24px", background:"#09090F", borderTop:"1px solid #181824", display:"flex", gap:10, alignItems:"center" }}>
-        <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === "Enter" && send()} placeholder="Écrivez votre message…" style={{ flex:1, background:"#111420", border:"1.5px solid #252836", borderRadius:14, color:"#E8EAF0", fontSize:14, padding:"12px 14px", fontFamily:"inherit" }} />
+        <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === "Enter" && send()} placeholder="Écrivez votre message…" maxLength={200} style={{ flex:1, background:"#111420", border:"1.5px solid #252836", borderRadius:14, color:"#E8EAF0", fontSize:14, padding:"12px 14px", fontFamily:"inherit" }} />
         <button type="button" onClick={send} disabled={!input.trim()} style={{ width:46, height:46, borderRadius:13, flexShrink:0, background: input.trim() ? R : "#252836", border:"none", cursor: input.trim() ? "pointer" : "not-allowed", display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, color:"#fff" }}>➤</button>
       </div>
     </div>
