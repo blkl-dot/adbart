@@ -648,16 +648,47 @@ function VocalAssistant({ go, user }) {
   const restoName = user?.resto || "notre restaurant";
   const [supported, setSupported] = useState(true);
   const [listening, setListening] = useState(false);
-  const [log, setLog] = useState([]); // {who:'bot'|'usr', t}
+  const [speaking, setSpeaking] = useState(false);
+  const [active, setActive] = useState(false);          // session mains libres en cours
+  const [log, setLog] = useState([]);                    // {who:'bot'|'usr', t}
   const [resv, setResv] = useState({});
-  const [step, setStep] = useState("idle"); // idle, persons, date, time, confirm, done
+  const [cart, setCart] = useState([]);
+  const [step, setStep] = useState("idle");              // idle, intent, r_persons, r_date, r_time, r_confirm, o_items, o_confirm, ended
   const recRef = useRef(null);
   const logRef = useRef(null);
   const stepRef = useRef("idle");
   const resvRef = useRef({});
+  const cartRef = useRef([]);
+  const activeRef = useRef(false);
+  const speakingRef = useRef(false);
+  const listeningRef = useRef(false);
+  const gotResultRef = useRef(false);
+  const voiceRef = useRef(null);
+
   useEffect(() => { stepRef.current = step; }, [step]);
   useEffect(() => { resvRef.current = resv; }, [resv]);
+  useEffect(() => { cartRef.current = cart; }, [cart]);
   useEffect(() => logRef.current?.scrollIntoView({ behavior:"smooth" }), [log]);
+
+  // Choix de la meilleure voix française disponible
+  useEffect(() => {
+    function pickVoice() {
+      const voices = window.speechSynthesis?.getVoices?.() || [];
+      const fr = voices.filter(v => v.lang && v.lang.toLowerCase().startsWith("fr"));
+      const preferred =
+        fr.find(v => /google/i.test(v.name)) ||
+        fr.find(v => /(amélie|amelie|audrey|virginie|marie|julie|léa|lea|charlotte)/i.test(v.name)) ||
+        fr.find(v => /natural|enhanced|premium/i.test(v.name)) ||
+        fr[0] || null;
+      if (preferred) voiceRef.current = preferred;
+    }
+    pickVoice();
+    if (window.speechSynthesis) window.speechSynthesis.onvoiceschanged = pickVoice;
+    return () => { if (window.speechSynthesis) window.speechSynthesis.onvoiceschanged = null; };
+  }, []);
+
+  // Nettoyage en quittant
+  useEffect(() => () => { stopAll(); }, []);
 
   // Bloque l'accès si pas le bon plan
   if (!rights.vocal) {
@@ -674,94 +705,195 @@ function VocalAssistant({ go, user }) {
     );
   }
 
-  function speak(text) {
-    try {
-      const u = new SpeechSynthesisUtterance(text);
-      u.lang = "fr-FR"; u.rate = 1;
-      window.speechSynthesis.cancel();
-      window.speechSynthesis.speak(u);
-    } catch (e) {}
+  function stopAll() {
+    activeRef.current = false;
+    try { recRef.current?.stop(); } catch (e) {}
+    try { recRef.current?.abort?.(); } catch (e) {}
+    try { window.speechSynthesis?.cancel(); } catch (e) {}
+    listeningRef.current = false; speakingRef.current = false;
   }
-  function botSay(text) { setLog(l => [...l, { who:"bot", t:text }]); speak(text); }
+
+  // L'assistant parle, puis (si la session est active) se remet à écouter
+  function speak(text, after) {
+    setLog(l => [...l, { who:"bot", t:text }]);
+    let done = false;
+    const finish = () => { if (done) return; done = true; speakingRef.current = false; setSpeaking(false); if (after) after(); };
+    try {
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = "fr-FR";
+      if (voiceRef.current) u.voice = voiceRef.current;
+      u.rate = 1.02; u.pitch = 1.08;   // un peu plus vivant, moins robotique
+      speakingRef.current = true; setSpeaking(true);
+      u.onend = finish; u.onerror = finish;
+      // sécurité si onend ne se déclenche pas
+      setTimeout(finish, 1200 + text.length * 95);
+      window.speechSynthesis.speak(u);
+    } catch (e) { finish(); }
+  }
   function usrSay(text) { setLog(l => [...l, { who:"usr", t:text }]); }
 
-  function getRec() {
+  // Parle puis écoute automatiquement (cœur du mode mains libres)
+  function botTurn(text) {
+    speak(text, () => { if (activeRef.current && stepRef.current !== "ended") beginListen(); });
+  }
+
+  function beginListen() {
+    if (!activeRef.current || speakingRef.current || listeningRef.current) return;
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) { setSupported(false); return null; }
+    if (!SR) { setSupported(false); return; }
     const rec = new SR();
     rec.lang = "fr-FR"; rec.interimResults = false; rec.maxAlternatives = 1; rec.continuous = false;
-    rec.onresult = e => { const txt = e.results[0][0].transcript; handle(txt); };
-    rec.onend = () => setListening(false);
-    rec.onerror = () => setListening(false);
-    return rec;
-  }
-  function listen() {
-    const rec = getRec();
-    if (!rec) return;
+    gotResultRef.current = false;
+    rec.onresult = e => {
+      const txt = e.results[0][0].transcript;
+      gotResultRef.current = true;
+      listeningRef.current = false; setListening(false);
+      handle(txt);
+    };
+    rec.onend = () => {
+      listeningRef.current = false; setListening(false);
+      // silence / pas de résultat → on relance l'écoute si la session continue
+      if (activeRef.current && !speakingRef.current && stepRef.current !== "ended" && !gotResultRef.current) {
+        setTimeout(() => beginListen(), 350);
+      }
+    };
+    rec.onerror = () => {
+      listeningRef.current = false; setListening(false);
+      if (activeRef.current && !speakingRef.current && stepRef.current !== "ended") {
+        setTimeout(() => beginListen(), 600);
+      }
+    };
     recRef.current = rec;
-    setListening(true);
-    try { rec.start(); } catch (e) { setListening(false); }
+    listeningRef.current = true; setListening(true);
+    try { rec.start(); } catch (e) { listeningRef.current = false; setListening(false); }
   }
+
+  function parseNum(txt, t) {
+    const n = txt.match(/\d+/);
+    if (n) return n[0];
+    const map = { "un":"1","une":"1","deux":"2","trois":"3","quatre":"4","cinq":"5","six":"6","sept":"7","huit":"8","neuf":"9","dix":"10" };
+    for (const k in map) if (t.includes(k)) return map[k];
+    return null;
+  }
+
   function startConversation() {
-    setLog([]); setResv({}); setStep("persons"); stepRef.current = "persons";
-    botSay(`Bonjour et bienvenue chez ${restoName} ! Je suis votre assistant vocal. Pour combien de personnes souhaitez-vous réserver ?`);
+    window.speechSynthesis?.cancel();
+    setLog([]); setResv({}); setCart([]); resvRef.current = {}; cartRef.current = [];
+    setStep("intent"); stepRef.current = "intent";
+    setActive(true); activeRef.current = true;
+    botTurn(`Bonjour, je suis votre assistant pour le restaurant ${restoName}. Je peux répondre à vos questions, vous aider à réserver une table, ou passer une commande. Que souhaitez-vous faire ?`);
   }
+
+  function endPolitely() {
+    setStep("ended"); stepRef.current = "ended";
+    setActive(false); activeRef.current = false;
+    speak("Merci beaucoup et à très bientôt !");
+  }
+
   function handle(txt) {
     usrSay(txt);
     const t = txt.toLowerCase();
     const s = stepRef.current;
-    if (s === "persons") {
-      const n = txt.match(/\d+/);
-      const num = n ? n[0] : (t.includes("deux")?"2":t.includes("trois")?"3":t.includes("quatre")?"4":t.includes("cinq")?"5":t.includes("six")?"6":null);
-      if (num) { const r = { ...resvRef.current, persons:num }; setResv(r); resvRef.current = r; setStep("date"); stepRef.current = "date"; botSay(`Parfait, une table pour ${num}. Pour quelle date ? Par exemple ce soir, demain, ou samedi.`); }
-      else { botSay("Je n'ai pas compris le nombre de personnes. Pouvez-vous répéter ?"); }
+
+    // ── Choix de l'intention ──
+    if (s === "intent") {
+      if (/(réserv|reserv|table)/.test(t)) { setStep("r_persons"); stepRef.current = "r_persons"; botTurn("Avec plaisir. Pour combien de personnes souhaitez-vous réserver ?"); return; }
+      if (/(command|commande|commander|manger|plat|emporter|prendre)/.test(t)) { setStep("o_items"); stepRef.current = "o_items"; setCart([]); cartRef.current = []; botTurn("Très bien. Quel plat souhaitez-vous commander ?"); return; }
+      if (/(horaire|ouvert|heure|fermé|ferme)/.test(t)) { botTurn("Nous sommes ouverts tous les jours : le midi de midi à quatorze heures trente, et le soir de dix-neuf heures à vingt-trois heures trente. Souhaitez-vous réserver, commander, ou autre chose ?"); return; }
+      if (/(adresse|où|ou êtes|situé|trouve|adress)/.test(t)) { botTurn("Vous nous trouverez à l'adresse indiquée sur notre page. Souhaitez-vous réserver une table ou passer une commande ?"); return; }
+      if (/(livr|livraison)/.test(t)) { botTurn("Nous ne faisons pas de livraison pour le moment, mais vous pouvez commander à emporter. Souhaitez-vous passer une commande ?"); return; }
+      if (/(allerg|gluten|lactose|végé|vege|vegan)/.test(t)) { botTurn("Nos plats peuvent contenir des allergènes. Précisez votre allergie au moment de la commande et nous en tiendrons compte. Souhaitez-vous autre chose ?"); return; }
+      if (/(non|merci|rien|c'est tout|cest tout|au revoir|fini|terminé|termine)/.test(t)) { endPolitely(); return; }
+      botTurn("Je peux vous aider à réserver une table, passer une commande, ou répondre à vos questions sur le restaurant. Que souhaitez-vous faire ?");
       return;
     }
-    if (s === "date") { const r = { ...resvRef.current, date:txt }; setResv(r); resvRef.current = r; setStep("time"); stepRef.current = "time"; botSay("Très bien. À quelle heure souhaitez-vous venir ?"); return; }
-    if (s === "time") { const r = { ...resvRef.current, time:txt }; setResv(r); resvRef.current = r; setStep("confirm"); stepRef.current = "confirm"; botSay(`Je récapitule : une table pour ${r.persons} personnes, ${r.date}, à ${r.time}. C'est bien ça ? Dites oui pour confirmer.`); return; }
-    if (s === "confirm") {
-      if (t.includes("oui") || t.includes("confirm") || t.includes("ok") || t.includes("c'est ça") || t.includes("exact")) {
+
+    // ── Réservation ──
+    if (s === "r_persons") {
+      const num = parseNum(txt, t);
+      if (num) { const r = { ...resvRef.current, persons:num }; setResv(r); resvRef.current = r; setStep("r_date"); stepRef.current = "r_date"; botTurn(`Parfait, une table pour ${num}. Pour quelle date ? Par exemple ce soir, demain, ou samedi.`); }
+      else { botTurn("Je n'ai pas compris le nombre de personnes. Pouvez-vous répéter ?"); }
+      return;
+    }
+    if (s === "r_date") { const r = { ...resvRef.current, date:txt }; setResv(r); resvRef.current = r; setStep("r_time"); stepRef.current = "r_time"; botTurn("Très bien. À quelle heure souhaitez-vous venir ?"); return; }
+    if (s === "r_time") { const r = { ...resvRef.current, time:txt }; setResv(r); resvRef.current = r; setStep("r_confirm"); stepRef.current = "r_confirm"; botTurn(`Je récapitule : une table pour ${r.persons} personnes, ${r.date}, à ${r.time}. Je confirme ? Dites oui ou non.`); return; }
+    if (s === "r_confirm") {
+      if (/(oui|confirm|ok|exact|c'est ça|cest ca|parfait|valid)/.test(t)) {
         const r = resvRef.current;
         db.add({ id:"RES-"+uid(), client:"Assistant vocal", type:"reservation", items:[`Table pour ${r.persons} personnes`, `${r.date} à ${r.time}`], total:"—", time:now(), status:"en_cours", note:"Réservation prise par assistant vocal" });
-        setStep("done"); stepRef.current = "done";
-        botSay("C'est confirmé ! Votre réservation est enregistrée. À très bientôt !");
-      } else if (t.includes("non") || t.includes("modif")) {
-        setResv({}); resvRef.current = {}; setStep("persons"); stepRef.current = "persons";
-        botSay("Pas de problème, on recommence. Pour combien de personnes ?");
-      } else { botSay("Dites oui pour confirmer, ou non pour recommencer."); }
+        setResv({}); resvRef.current = {}; setStep("intent"); stepRef.current = "intent";
+        botTurn("C'est noté, votre table est réservée. Souhaitez-vous autre chose ? Réserver, commander, ou poser une question ?");
+      } else if (/(non|modif|recommenc|change)/.test(t)) {
+        setResv({}); resvRef.current = {}; setStep("r_persons"); stepRef.current = "r_persons";
+        botTurn("Pas de problème, on recommence. Pour combien de personnes ?");
+      } else { botTurn("Dites oui pour confirmer, ou non pour recommencer."); }
+      return;
+    }
+
+    // ── Commande ──
+    if (s === "o_items") {
+      if (/(c'est tout|cest tout|rien d'autre|rien d autre|terminé|termine|voilà|voila|fini|c'est bon|cest bon|ce sera tout)/.test(t)) {
+        if (cartRef.current.length === 0) { botTurn("Votre commande est vide pour le moment. Quel plat souhaitez-vous ?"); return; }
+        setStep("o_confirm"); stepRef.current = "o_confirm";
+        botTurn(`Vous avez commandé : ${cartRef.current.join(", ")}. Je valide la commande ? Dites oui ou non.`); return;
+      }
+      const next = [...cartRef.current, txt];
+      setCart(next); cartRef.current = next;
+      botTurn(`J'ai noté ${txt}. Souhaitez-vous autre chose ? Sinon, dites "c'est tout".`);
+      return;
+    }
+    if (s === "o_confirm") {
+      if (/(oui|confirm|ok|valid|parfait|exact)/.test(t)) {
+        db.add({ id:"CMD-"+uid(), client:"Assistant vocal", type:"commande", items:cartRef.current.slice(), total:"—", time:now(), status:"en_cours", note:"Commande prise par assistant vocal" });
+        setCart([]); cartRef.current = []; setStep("intent"); stepRef.current = "intent";
+        botTurn("Parfait, votre commande est transmise en cuisine. Souhaitez-vous autre chose ?");
+      } else if (/(non|modif|ajout|recommenc|change)/.test(t)) {
+        setStep("o_items"); stepRef.current = "o_items";
+        botTurn("D'accord. Dites-moi le plat que vous souhaitez.");
+      } else { botTurn("Dites oui pour valider, ou non pour modifier la commande."); }
       return;
     }
   }
 
+  const statusText = speaking ? "🔊 L'assistant parle…" : listening ? "🔴 Je vous écoute…" : active ? "…" : (step === "ended" ? "Conversation terminée" : "Appuyez pour démarrer");
+
   return (
     <div style={{ minHeight:"100vh", display:"flex", flexDirection:"column", maxWidth:480, margin:"0 auto" }}>
-      <TopBar title="🎙️ Assistant vocal" sub="Parlez, il vous répond" onBack={() => { window.speechSynthesis?.cancel(); go("admin"); }} dot={BL} />
-      <div style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", padding:"24px 18px", gap:20 }}>
+      <TopBar title="🎙️ Assistant vocal" sub="Mains libres · il vous écoute et vous répond" onBack={() => { stopAll(); go("admin"); }} dot={BL} />
+      <div style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", padding:"24px 18px", gap:18 }}>
         {!supported && (
           <div style={{ background:"#EF444415", border:"1px solid #EF444445", borderRadius:14, padding:16, fontSize:13, color:"#FCA5A5", lineHeight:1.6, textAlign:"center" }}>
             Votre navigateur ne supporte pas la reconnaissance vocale. Essayez avec Google Chrome.
           </div>
         )}
-        {/* Bouton micro central */}
-        <div style={{ position:"relative", marginTop:10 }}>
-          {listening && <div style={{ position:"absolute", inset:0, borderRadius:"50%", background:BL, animation:"vpulse 1.4s ease-out infinite" }} />}
-          <button type="button" onClick={listening ? () => { recRef.current?.stop(); setListening(false); } : listen}
-            style={{ position:"relative", width:120, height:120, borderRadius:"50%", border:"none", cursor:"pointer", background: listening ? BL : `${BL}25`, color:"#fff", fontSize:46, display:"flex", alignItems:"center", justifyContent:"center", boxShadow: listening ? `0 0 40px ${BL}90` : `0 0 20px ${BL}40`, transition:"all .2s" }}>
-            🎤
-          </button>
-        </div>
-        <div style={{ fontSize:14, color: listening ? BL : "#6B7280", fontWeight:700, minHeight:20 }}>
-          {listening ? "🔴 Je vous écoute…" : step === "idle" ? "Appuyez pour démarrer" : "Appuyez pour répondre"}
-        </div>
 
-        {step === "idle" && (
+        {/* Cercle micro animé */}
+        <div style={{ position:"relative", marginTop:6 }}>
+          {(listening || speaking) && <div style={{ position:"absolute", inset:0, borderRadius:"50%", background: speaking ? OR : BL, animation:"vpulse 1.4s ease-out infinite" }} />}
+          <div style={{ position:"relative", width:120, height:120, borderRadius:"50%", background: speaking ? `${OR}30` : listening ? BL : `${BL}25`, color:"#fff", fontSize:46, display:"flex", alignItems:"center", justifyContent:"center", boxShadow: (listening||speaking) ? `0 0 40px ${(speaking?OR:BL)}90` : `0 0 20px ${BL}40`, transition:"all .2s" }}>
+            {speaking ? "🔊" : "🎤"}
+          </div>
+        </div>
+        <div style={{ fontSize:14, color: speaking ? OR : listening ? BL : "#6B7280", fontWeight:700, minHeight:20 }}>{statusText}</div>
+
+        {/* Démarrer / Terminer */}
+        {!active && step !== "ended" && (
           <button type="button" onClick={startConversation} style={{ padding:"15px 30px", borderRadius:14, background:BL, color:"#fff", border:"none", fontWeight:800, fontSize:15, cursor:"pointer", boxShadow:`0 5px 26px ${BL}55` }}>
-            ▶️ Démarrer une réservation vocale
+            ▶️ Démarrer la conversation
           </button>
+        )}
+        {active && (
+          <div style={{ display:"flex", gap:8 }}>
+            <button type="button" onClick={() => { stopAll(); setActive(false); setListening(false); setSpeaking(false); setStep("ended"); stepRef.current = "ended"; }} style={{ padding:"11px 22px", borderRadius:14, background:"#EF4444", color:"#fff", border:"none", fontWeight:800, fontSize:14, cursor:"pointer" }}>⏹ Terminer</button>
+            {!listening && !speaking && (
+              <button type="button" onClick={beginListen} style={{ padding:"11px 18px", borderRadius:14, background:"#181824", color:"#E8EAF0", border:"1px solid #252836", fontWeight:700, fontSize:13, cursor:"pointer" }}>🎤 Reprendre l'écoute</button>
+            )}
+          </div>
         )}
 
         {/* Conversation */}
-        <div style={{ width:"100%", display:"flex", flexDirection:"column", gap:10, marginTop:6 }}>
+        <div style={{ width:"100%", display:"flex", flexDirection:"column", gap:10, marginTop:4 }}>
           {log.map((m, i) => (
             <div key={i} className="fu" style={{ display:"flex", justifyContent: m.who === "usr" ? "flex-end" : "flex-start", gap:8 }}>
               {m.who === "bot" && <div style={{ width:30, height:30, background:`${BL}25`, borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", fontSize:15, flexShrink:0, alignSelf:"flex-end" }}>🎙️</div>}
@@ -771,18 +903,25 @@ function VocalAssistant({ go, user }) {
           <div ref={logRef} />
         </div>
 
-        {step === "done" && (
+        {/* Panier en cours */}
+        {cart.length > 0 && (
+          <div className="fu" style={{ width:"100%", background:"#111420", border:`1px solid ${BL}45`, borderRadius:14, padding:"12px 16px" }}>
+            <div style={{ fontSize:11, fontWeight:700, color:BL, letterSpacing:1, marginBottom:8 }}>🛒 COMMANDE EN COURS</div>
+            {cart.map((c, i) => (<div key={i} style={{ fontSize:13, color:"#C8CAD0", marginBottom:4 }}>▸ {c}</div>))}
+          </div>
+        )}
+
+        {step === "ended" && (
           <div className="fu" style={{ width:"100%", background:`${V}10`, border:`1px solid ${V}45`, borderRadius:14, padding:16, textAlign:"center" }}>
-            <div style={{ fontSize:14, fontWeight:700, color:V, marginBottom:12 }}>🎉 Réservation enregistrée !</div>
             <div style={{ display:"flex", gap:8, justifyContent:"center" }}>
-              <button type="button" onClick={() => go("dashboard")} style={{ padding:"10px 20px", borderRadius:22, background:V, color:"#fff", border:"none", fontWeight:700, fontSize:13, cursor:"pointer", fontFamily:"inherit" }}>Voir dans la cuisine →</button>
-              <button type="button" onClick={startConversation} style={{ padding:"10px 20px", borderRadius:22, background:"#181824", color:"#E8EAF0", border:"1px solid #252836", fontWeight:700, fontSize:13, cursor:"pointer", fontFamily:"inherit" }}>Nouvelle réservation</button>
+              <button type="button" onClick={() => go("dashboard")} style={{ padding:"10px 20px", borderRadius:22, background:V, color:"#fff", border:"none", fontWeight:700, fontSize:13, cursor:"pointer", fontFamily:"inherit" }}>Voir la cuisine →</button>
+              <button type="button" onClick={startConversation} style={{ padding:"10px 20px", borderRadius:22, background:"#181824", color:"#E8EAF0", border:"1px solid #252836", fontWeight:700, fontSize:13, cursor:"pointer", fontFamily:"inherit" }}>Recommencer</button>
             </div>
           </div>
         )}
 
         <div style={{ marginTop:"auto", fontSize:11, color:"#555B6E", textAlign:"center", lineHeight:1.6, paddingTop:20 }}>
-          💡 Astuce : autorisez le micro quand le navigateur le demande.<br />Fonctionne mieux sur Google Chrome.
+          💡 Parlez après le bip sonore. L'assistant écoute tout seul.<br />Autorisez le micro et utilisez Google Chrome.
         </div>
       </div>
     </div>
