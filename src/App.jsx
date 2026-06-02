@@ -9,9 +9,9 @@ const EMOJIS = ["🍔","🍕","🌮","🌯","🫓","🍗","🌭","🍟","🍝","
 
 // ── Plans (tous incluent : SMS appel manqué + lien + chatbot + cuisine) ──
 const PLANS = [
-  { key:"starter", name:"Starter", price:29, features:["SMS automatique sur appel manqué","Lien de commande envoyé par SMS","Chatbot commande + réservation","Dashboard cuisine temps réel","Jusqu'à 100 SMS/mois"], missing:["SMS illimités","Support prioritaire 7j/7"] },
-  { key:"pro", name:"Pro", price:59, popular:true, features:["SMS automatique sur appel manqué","Lien de commande envoyé par SMS","Chatbot commande + réservation","Dashboard cuisine temps réel","SMS illimités"], missing:["Support prioritaire 7j/7"] },
-  { key:"premium", name:"Premium", price:99, features:["SMS automatique sur appel manqué","Lien de commande envoyé par SMS","Chatbot commande + réservation","Dashboard cuisine temps réel","SMS illimités","Support prioritaire 7j/7"], missing:[] },
+  { key:"starter", name:"Starter", price:29, features:["SMS automatique sur appel manqué","Lien de commande envoyé par SMS","Chatbot commande + réservation","Dashboard cuisine temps réel","Jusqu'à 100 SMS/mois"], missing:["SMS illimités","Installation faite par un technicien"] },
+  { key:"pro", name:"Pro", price:59, popular:true, features:["SMS automatique sur appel manqué","Lien de commande envoyé par SMS","Chatbot commande + réservation","Dashboard cuisine temps réel","SMS illimités"], missing:["Installation faite par un technicien"] },
+  { key:"premium", name:"Premium", price:99, features:["SMS automatique sur appel manqué","Lien de commande envoyé par SMS","Chatbot commande + réservation","Dashboard cuisine temps réel","SMS illimités","Installation faite par un technicien (panel admin configuré pour vous)"], missing:[] },
 ];
 
 // ── Base de données Supabase (liée au compte connecté) ─
