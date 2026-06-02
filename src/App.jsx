@@ -14,6 +14,15 @@ const PLANS = [
   { key:"premium", name:"Premium", price:99, features:["SMS automatique appel manqué","Chatbot commande + réservation","SMS illimités","Dashboard cuisine temps réel","Réservations en ligne","Support prioritaire 7j/7"], missing:[] },
 ];
 
+// ── Droits par plan ───────────────────────────────────────────────────
+// cuisine = accès au dashboard cuisine
+const PLAN_FEATURES = {
+  starter: { cuisine: false, supportPrio: false },
+  pro:     { cuisine: true,  supportPrio: false },
+  premium: { cuisine: true,  supportPrio: true },
+};
+const planRights = key => PLAN_FEATURES[key] || PLAN_FEATURES.starter;
+
 // ── Base de données Supabase (liée au compte connecté) ─
 let _orders = [];
 let _subs = [];
@@ -99,7 +108,6 @@ export default function AdBarth() {
 
   useEffect(() => db.sub(setOrders), []);
 
-  // Vérifie la session au chargement + écoute les changements
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       if (data?.session?.user) applySession(data.session.user);
@@ -120,6 +128,7 @@ export default function AdBarth() {
       name: data?.nom || authUser.user_metadata?.nom || "",
       resto: data?.resto || authUser.user_metadata?.resto || "Mon restaurant",
       phone: data?.telephone || authUser.user_metadata?.telephone || "",
+      plan: data?.plan || authUser.user_metadata?.plan || "starter",
     };
     setUser(u);
     db.reload();
@@ -141,13 +150,13 @@ export default function AdBarth() {
       {page === "admin" && <Admin user={user} go={go} onLogout={logout} />}
       {page === "simulator" && <Simulator go={go} user={user} />}
       {page === "chatbot" && <Chatbot go={go} user={user} />}
-      {page === "dashboard" && <Dashboard go={go} orders={orders} />}
+      {page === "dashboard" && <Dashboard go={go} orders={orders} user={user} />}
     </div></>
   );
 }
 
 // ═════════════════════════════════════════════════════════════════════
-// LOGIN — connexion Supabase
+// LOGIN
 // ═════════════════════════════════════════════════════════════════════
 function Login({ go, onLogged }) {
   const [email, setEmail] = useState("");
@@ -410,12 +419,13 @@ function Pricing({ go, onPick }) {
 }
 
 // ═════════════════════════════════════════════════════════════════════
-// SIGNUP — inscription Supabase
+// SIGNUP — enregistre aussi le plan choisi
 // ═════════════════════════════════════════════════════════════════════
 function Signup({ go, plan, onLogged }) {
   const [f, setF] = useState({ name:"", email:"", phone:"", resto:"", pass:"", pass2:"" });
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
+  const chosenPlan = plan || PLANS[1]; // défaut Pro si arrivé sans choisir
   async function submit(e) {
     e.preventDefault();
     if (!f.name || !f.email || !f.resto || !f.pass) { setErr("Remplissez tous les champs obligatoires."); return; }
@@ -427,11 +437,13 @@ function Signup({ go, plan, onLogged }) {
     const { data, error } = await supabase.auth.signUp({
       email: f.email.trim(),
       password: f.pass,
-      options: { data: { nom: f.name, resto: f.resto, telephone: f.phone } },
+      options: { data: { nom: f.name, resto: f.resto, telephone: f.phone, plan: chosenPlan.key } },
     });
     setLoading(false);
     if (error) { setErr(error.message || "Erreur lors de l'inscription."); return; }
     if (data?.user) {
+      // enregistre le plan dans le profil (au cas où le trigger ne le fait pas)
+      await supabase.from("comptes").update({ plan: chosenPlan.key, prix: chosenPlan.price }).eq("id", data.user.id);
       if (data.session) { onLogged(data.user); }
       else { setErr("Compte créé ! Vérifiez votre email pour confirmer, puis connectez-vous."); }
     }
@@ -443,9 +455,9 @@ function Signup({ go, plan, onLogged }) {
         <div style={{ background:"#111420", border:"1px solid #181824", borderRadius:14, padding:"14px 18px", marginBottom:20, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
           <div>
             <div style={{ fontSize:12, color:"#6B7280", fontWeight:700 }}>Plan sélectionné</div>
-            <div style={{ fontFamily:"'Syne',sans-serif", fontSize:20, fontWeight:900, color:R, marginTop:2 }}>{plan?.name || "Pro"}</div>
+            <div style={{ fontFamily:"'Syne',sans-serif", fontSize:20, fontWeight:900, color:R, marginTop:2 }}>{chosenPlan.name}</div>
           </div>
-          <div style={{ fontFamily:"'Syne',sans-serif", fontSize:24, fontWeight:900 }}>{plan?.price || 59}€<span style={{ fontSize:12, color:"#6B7280", fontWeight:600 }}>/mois</span></div>
+          <div style={{ fontFamily:"'Syne',sans-serif", fontSize:24, fontWeight:900 }}>{chosenPlan.price}€<span style={{ fontSize:12, color:"#6B7280", fontWeight:600 }}>/mois</span></div>
         </div>
         <form onSubmit={submit} style={{ display:"flex", flexDirection:"column", gap:13 }}>
           <Field l="Prénom & Nom *"><input value={f.name} onChange={e => setF(v => ({ ...v, name:e.target.value }))} placeholder="Jean Dupont" style={I} /></Field>
@@ -469,9 +481,12 @@ function Signup({ go, plan, onLogged }) {
 }
 
 // ═════════════════════════════════════════════════════════════════════
-// ADMIN
+// ADMIN — adapte les fonctions selon le plan
 // ═════════════════════════════════════════════════════════════════════
 function Admin({ user, go, onLogout }) {
+  const rights = planRights(user?.plan);
+  const planName = (PLANS.find(p => p.key === user?.plan) || PLANS[0]).name;
+  const planPrice = (PLANS.find(p => p.key === user?.plan) || PLANS[0]).price;
   const [tab, setTab] = useState("infos");
   const [cfg, setCfg] = useState({
     name: user?.resto || "", phone: user?.phone || "", address: "",
@@ -490,6 +505,11 @@ function Admin({ user, go, onLogout }) {
   const [showEm, setShowEm] = useState(false);
   const accent = cfg.color;
   function save() { setSaved(true); setToast("✓ Modifications sauvegardées"); setTimeout(() => { setSaved(false); setToast(""); }, 2600); }
+  function showToast(msg) { setToast(msg); setTimeout(() => setToast(""), 2800); }
+  function clickCuisine() {
+    if (rights.cuisine) go("dashboard");
+    else showToast("🔒 Dashboard cuisine réservé aux plans Pro et Premium");
+  }
   function addItem() {
     if (!form.name || !form.price || !form.cat) return;
     if (editId !== null) { setMenu(m => m.map(i => i.id === editId ? { ...form, id:editId, on:true } : i)); setEditId(null); }
@@ -512,20 +532,21 @@ function Admin({ user, go, onLogout }) {
   return (
     <div style={{ minHeight:"100vh", display:"flex", flexDirection:"column", maxWidth:520, margin:"0 auto" }}>
       {toast && (
-        <div className="fu" style={{ position:"fixed", bottom:28, left:"50%", transform:"translateX(-50%)", background:V, color:"#fff", padding:"10px 24px", borderRadius:22, fontSize:13, fontWeight:700, zIndex:300, boxShadow:`0 4px 26px ${V}55`, whiteSpace:"nowrap" }}>{toast}</div>
+        <div className="fu" style={{ position:"fixed", bottom:28, left:"50%", transform:"translateX(-50%)", background: toast.startsWith("🔒") ? R : V, color:"#fff", padding:"10px 24px", borderRadius:22, fontSize:13, fontWeight:700, zIndex:300, boxShadow:`0 4px 26px ${(toast.startsWith("🔒") ? R : V)}55`, maxWidth:"90%", textAlign:"center" }}>{toast}</div>
       )}
       <div style={{ background:"#111420", borderBottom:"1px solid #181824", padding:"12px 16px", display:"flex", alignItems:"center", justifyContent:"space-between", position:"sticky", top:0, zIndex:20 }}>
         <div>
           <div style={{ display:"flex", alignItems:"center", gap:8 }}>
             <Logo size={16} />
             <span style={{ fontSize:10, fontWeight:700, color:"#6B7280", background:"#181824", border:"1px solid #252836", borderRadius:20, padding:"2px 10px", letterSpacing:.5 }}>ADMIN</span>
+            <span style={{ fontSize:10, fontWeight:800, color:R, background:`${R}18`, border:`1px solid ${R}45`, borderRadius:20, padding:"2px 10px" }}>{planName}</span>
           </div>
           <div style={{ fontSize:11, color:"#6B7280", marginTop:2 }}>{cfg.name || user?.resto}</div>
         </div>
         <div style={{ display:"flex", gap:7, alignItems:"center", flexWrap:"wrap" }}>
           <AdminBtn color={R} onClick={() => go("simulator")}>📞 Test</AdminBtn>
           <AdminBtn color={V} onClick={() => go("chatbot")}>💬 Chatbot</AdminBtn>
-          <AdminBtn color="#3B82F6" onClick={() => go("dashboard")}>🍽️ Cuisine</AdminBtn>
+          <AdminBtn color={rights.cuisine ? "#3B82F6" : "#555B6E"} onClick={clickCuisine}>{rights.cuisine ? "🍽️ Cuisine" : "🔒 Cuisine"}</AdminBtn>
           <AdminBtn color="#9CA3AF" onClick={onLogout}>⏻ Déco</AdminBtn>
           <ToggleSwitch value={cfg.active} onChange={v => setCfg(c => ({ ...c, active:v }))} accent={V} />
         </div>
@@ -739,10 +760,19 @@ function Admin({ user, go, onLogout }) {
               </div>
             ))}
           </div>
-          <div style={{ background:"#111420", border:"1px solid #181824", borderRadius:16, padding:20 }}>
-            <div style={{ fontSize:13, fontWeight:700, marginBottom:10 }}>Les stats se rempliront ici</div>
-            <p style={{ fontSize:13, color:"#6B7280", lineHeight:1.65 }}>Dès que vos premiers appels manqués seront détectés et que vos clients utiliseront le chatbot, vos statistiques apparaîtront ici en temps réel.</p>
+          <div style={{ background:"#111420", border:"1px solid #181824", borderRadius:16, padding:20, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+            <div>
+              <div style={{ fontSize:16, fontWeight:800 }}>Plan {planName}</div>
+              <div style={{ fontSize:12, color:"#6B7280", marginTop:3 }}>Abonnement actif · Renouvellement mensuel</div>
+            </div>
+            <div style={{ fontFamily:"'Syne',sans-serif", fontSize:22, fontWeight:900, color:accent }}>{planPrice}€<span style={{ fontSize:12, color:"#6B7280", fontWeight:600 }}>/mois</span></div>
           </div>
+          {!rights.cuisine && (
+            <div style={{ background:`${R}10`, border:`1px solid ${R}45`, borderRadius:16, padding:18 }}>
+              <div style={{ fontSize:14, fontWeight:800, color:R, marginBottom:6 }}>🔒 Dashboard cuisine verrouillé</div>
+              <p style={{ fontSize:13, color:"#9CA3AF", lineHeight:1.6 }}>Le dashboard cuisine en temps réel est disponible à partir du plan Pro (59€/mois). Passez à un plan supérieur pour en profiter.</p>
+            </div>
+          )}
         </>}
       </div>
     </div>
@@ -966,10 +996,24 @@ function Chatbot({ go, user }) {
 }
 
 // ═════════════════════════════════════════════════════════════════════
-// DASHBOARD CUISINE
+// DASHBOARD CUISINE — protégé selon le plan
 // ═════════════════════════════════════════════════════════════════════
-function Dashboard({ go, orders }) {
+function Dashboard({ go, orders, user }) {
+  const rights = planRights(user?.plan);
   const [filter, setFilter] = useState("en_cours");
+  if (!rights.cuisine) {
+    return (
+      <div style={{ minHeight:"100vh", display:"flex", flexDirection:"column", maxWidth:520, margin:"0 auto" }}>
+        <TopBar title="Dashboard cuisine" onBack={() => go("admin")} />
+        <div style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:30, textAlign:"center", gap:18 }}>
+          <div style={{ fontSize:54 }}>🔒</div>
+          <h2 style={{ fontFamily:"'Syne',sans-serif", fontSize:24, fontWeight:900, color:"#fff" }}>Fonctionnalité Pro</h2>
+          <p style={{ fontSize:14, color:"#9CA3AF", lineHeight:1.7, maxWidth:340 }}>Le dashboard cuisine en temps réel est disponible à partir du plan <strong style={{ color:R }}>Pro (59€/mois)</strong>. Votre plan actuel ne l'inclut pas.</p>
+          <PrimaryBtn lg onClick={() => go("admin")}>← Retour à l'admin</PrimaryBtn>
+        </div>
+      </div>
+    );
+  }
   const list = orders.filter(o => filter === "all" ? true : o.status === filter);
   const nb = orders.filter(o => o.status === "en_cours").length;
   return (
