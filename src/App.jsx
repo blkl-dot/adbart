@@ -9,8 +9,8 @@ const EMOJIS = ["🍔","🍕","🌮","🌯","🫓","🍗","🌭","🍟","🍝","
 
 // ── Plans (tous incluent : SMS appel manqué + lien + chatbot + cuisine) ──
 const PLANS = [
-  { key:"starter", name:"Starter", price:29.86, features:["SMS automatique sur appel manqué","Lien de commande envoyé par SMS","Chatbot commande + réservation","Dashboard cuisine temps réel","Jusqu'à 100 SMS/mois"], missing:["SMS illimités","Installation faite par un technicien"] },
-  { key:"pro", name:"Pro", price:49.86, popular:true, features:["SMS automatique sur appel manqué","Lien de commande envoyé par SMS","Chatbot commande + réservation","Dashboard cuisine temps réel","SMS illimités"], missing:["Installation faite par un technicien"] },
+  { key:"starter", name:"Starter", price:29.90, features:["SMS automatique sur appel manqué","Lien de commande envoyé par SMS","Chatbot commande + réservation","Dashboard cuisine temps réel","Jusqu'à 100 SMS/mois"], missing:["SMS illimités","Installation faite par un technicien"] },
+  { key:"pro", name:"Pro", price:49.90, popular:true, features:["SMS automatique sur appel manqué","Lien de commande envoyé par SMS","Chatbot commande + réservation","Dashboard cuisine temps réel","SMS illimités"], missing:["Installation faite par un technicien"] },
   { key:"premium", name:"Premium", price:79.90, features:["SMS automatique sur appel manqué","Lien de commande envoyé par SMS","Chatbot commande + réservation","Dashboard cuisine temps réel","SMS illimités","Installation faite par un technicien (panel admin configuré pour vous)"], missing:[] },
 ];
 
@@ -194,7 +194,7 @@ function Landing({ go }) {
           <GhostBtn lg onClick={() => go("simulator")}>📞 Voir la démo</GhostBtn>
         </div>
         <p className="fu" style={{ fontSize:13, color:"#555B6E", animationDelay:".4s" }}>
-          <strong style={{ color:"#E8EAF0" }}>À partir de 29,86€/mois</strong> · Sans engagement · Installation en 15 min
+          <strong style={{ color:"#E8EAF0" }}>À partir de 29,90€/mois</strong> · Sans engagement · Installation en 15 min
         </p>
         <p className="fu" style={{ fontSize:13, color:"#9CA3AF", animationDelay:".45s", marginTop:14 }}>
           Déjà un compte ? <span onClick={() => go("login")} style={{ color:R, fontWeight:700, cursor:"pointer" }}>Se connecter →</span>
@@ -280,7 +280,7 @@ function Landing({ go }) {
             { l:"Chatbot commande propre", a:"✓", b:"✗" },
             { l:"Dashboard cuisine", a:"✓", b:"✗" },
             { l:"Vos clients restent vôtres", a:"✓",b:"✗" },
-            { l:"Coût mensuel", a:"Fixe dès 29,86€", b:"Variable + %" },
+            { l:"Coût mensuel", a:"Fixe dès 29,90€", b:"Variable + %" },
           ].map((row, i) => (
             <div key={row.l} style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", padding:"13px 18px", borderBottom: i < 5 ? "1px solid #181824" : "none", background: i % 2 === 1 ? "#0E0F17" : "transparent" }}>
               <div style={{ fontSize:13, color:"#9CA3AF" }}>{row.l}</div>
