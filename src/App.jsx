@@ -1086,6 +1086,14 @@ function Dashboard({ go, orders, user }) {
     return off;
   }, []);
 
+  // Débloque le son du navigateur dès le premier contact (sans changer l'interrupteur)
+  useEffect(() => {
+    const unlock = () => { ensureAudio(); window.removeEventListener("pointerdown", unlock); window.removeEventListener("keydown", unlock); };
+    window.addEventListener("pointerdown", unlock);
+    window.addEventListener("keydown", unlock);
+    return () => { window.removeEventListener("pointerdown", unlock); window.removeEventListener("keydown", unlock); };
+  }, []);
+
   const list = orders.filter(o => filter === "all" ? true : o.status === filter);
   const nb = orders.filter(o => o.status === "en_cours").length;
   return (
@@ -1094,7 +1102,10 @@ function Dashboard({ go, orders, user }) {
       {flash && (<div className="fu" style={{ background:`${V}18`, borderBottom:`1px solid ${V}55`, padding:"10px 16px", textAlign:"center", fontSize:14, fontWeight:800, color:V }}>🔔 Nouvelle commande reçue !</div>)}
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"8px 14px", background:"#09090F", borderBottom:"1px solid #181824" }}>
         <span style={{ fontSize:11, color:"#6B7280", display:"flex", alignItems:"center", gap:6 }}><span style={{ width:7, height:7, borderRadius:"50%", background:V, display:"inline-block", animation:"blink 1.6s infinite" }} />En direct</span>
-        <button type="button" onClick={() => { ensureAudio(); setSoundOn(s => !s); }} style={{ padding:"6px 12px", borderRadius:20, background: soundOn ? `${V}18` : "#181824", border:`1px solid ${soundOn ? V+"55" : "#252836"}`, color: soundOn ? V : "#9CA3AF", fontSize:12, fontWeight:700, cursor:"pointer" }}>{soundOn ? "🔔 Son activé" : "🔕 Son coupé"}</button>
+        <div style={{ display:"flex", gap:8 }}>
+          <button type="button" onClick={() => { ensureAudio(); beep(); }} style={{ padding:"6px 12px", borderRadius:20, background:"#181824", border:"1px solid #252836", color:"#E8EAF0", fontSize:12, fontWeight:700, cursor:"pointer" }}>🔊 Tester</button>
+          <button type="button" onClick={() => { ensureAudio(); setSoundOn(s => !s); }} style={{ padding:"6px 12px", borderRadius:20, background: soundOn ? `${V}18` : "#181824", border:`1px solid ${soundOn ? V+"55" : "#252836"}`, color: soundOn ? V : "#9CA3AF", fontSize:12, fontWeight:700, cursor:"pointer" }}>{soundOn ? "🔔 Son activé" : "🔕 Son coupé"}</button>
+        </div>
       </div>
       <div style={{ display:"flex", background:"#09090F", borderBottom:"1px solid #181824", padding:"0 12px" }}>
         {[{ k:"en_cours", l:"⏳ En cours" }, { k:"pret", l:"✅ Prêt" }, { k:"all", l:"📋 Tout" }].map(t => (<button key={t.k} type="button" onClick={() => setFilter(t.k)} style={{ flex:1, padding:"12px 4px", background:"none", border:"none", borderBottom: filter === t.k ? `2px solid ${R}` : "2px solid transparent", color: filter === t.k ? R : "#6B7280", fontSize:13, fontWeight:700, cursor:"pointer", fontFamily:"inherit" }}>{t.l}</button>))}
