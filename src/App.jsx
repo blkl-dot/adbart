@@ -1077,13 +1077,22 @@ function Dashboard({ go, orders, user }) {
     } catch (e) {}
   }
 
-  // Temps réel : nouvelle commande → mise à jour + bip + flash
+  // Alerte (bip + bandeau) dès qu'une NOUVELLE commande apparaît dans la liste
+  const seenRef = useRef(null);
   useEffect(() => {
-    const off = db.subscribeRealtime(() => {
-      if (soundRef.current) beep();
-      setFlash(true); setTimeout(() => setFlash(false), 3500);
-    });
-    return off;
+    const ids = new Set(orders.map(o => o.id));
+    if (seenRef.current === null) { seenRef.current = ids; return; } // 1er chargement : pas de bip
+    let isNew = false;
+    ids.forEach(id => { if (!seenRef.current.has(id)) isNew = true; });
+    seenRef.current = ids;
+    if (isNew) { if (soundRef.current) beep(); setFlash(true); setTimeout(() => setFlash(false), 3500); }
+  }, [orders]);
+
+  // Rafraîchit en continu : temps réel (instantané si activé) + sondage de secours toutes les 7s
+  useEffect(() => {
+    const off = db.subscribeRealtime(() => {});
+    const timer = setInterval(() => db.reload(), 7000);
+    return () => { off(); clearInterval(timer); };
   }, []);
 
   // Débloque le son du navigateur dès le premier contact (sans changer l'interrupteur)
