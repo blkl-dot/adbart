@@ -540,7 +540,7 @@ function Signup({ go, plan, onLogged }) {
       return;
     }
     if (data?.user) {
-      await supabase.from("comptes").update({ plan: chosenPlan.key, prix: Math.round(chosenPlan.price), abonnement_fin: new Date(Date.now() + 30 * 864e5).toISOString() }).eq("id", data.user.id);
+      await supabase.from("comptes").update({ plan: chosenPlan.key, prix: Math.round(chosenPlan.price) }).eq("id", data.user.id);
       if (data.session) { onLogged(data.user); }
       else { setErr("Compte créé ! Vérifiez votre email pour confirmer, puis connectez-vous."); }
     }
@@ -645,7 +645,7 @@ function Admin({ user, go, onLogout, orders = [] }) {
     { k:"chatbot", i:"🤖", l:"Chatbot" }, { k:"menu", i:"🍽️", l:"Menu" }, { k:"stats", i:"📊", l:"Stats" },
   ];
   return (
-    <div style={{ minHeight:"100vh", display:"flex", flexDirection:"column", maxWidth:520, margin:"0 auto" }}>
+    <div style={{ minHeight:"100vh", display:"flex", flexDirection:"column", maxWidth:"100%", margin:"0 auto" }}>
       {toast && (<div className="fu" style={{ position:"fixed", bottom:28, left:"50%", transform:"translateX(-50%)", background:V, color:"#fff", padding:"10px 24px", borderRadius:22, fontSize:13, fontWeight:700, zIndex:300, maxWidth:"90%", textAlign:"center" }}>{toast}</div>)}
       <div style={{ background:"#111420", borderBottom:"1px solid #181824", padding:"12px 16px", display:"flex", alignItems:"center", justifyContent:"space-between", position:"sticky", top:0, zIndex:20 }}>
         <div>
@@ -1162,7 +1162,7 @@ function Dashboard({ go, orders, user }) {
   const list = orders.filter(o => filter === "all" ? true : o.status === filter);
   const nb = orders.filter(o => o.status === "en_cours").length;
   return (
-    <div style={{ minHeight:"100vh", display:"flex", flexDirection:"column", maxWidth:520, margin:"0 auto" }}>
+    <div style={{ minHeight:"100vh", display:"flex", flexDirection:"column", maxWidth:"100%", margin:"0 auto" }}>
       <TopBar title="Commandes en cours" onBack={() => go("admin")} badge={nb} />
       {flash && (<div className="fu" style={{ background:`${V}18`, borderBottom:`1px solid ${V}55`, padding:"10px 16px", textAlign:"center", fontSize:14, fontWeight:800, color:V }}>🔔 Nouvelle commande reçue !</div>)}
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:8, padding:"8px 14px", background:"#09090F", borderBottom:"1px solid #181824", flexWrap:"wrap" }}>
@@ -1286,13 +1286,13 @@ function Renew({ go, user, onLogout }) {
     <div style={{ minHeight:"100vh", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:24, textAlign:"center", gap:16, maxWidth:440, margin:"0 auto" }}>
       <Logo size={26} />
       <div style={{ fontSize:52, marginTop:6 }}>⏳</div>
-      <h2 style={{ fontFamily:"'Syne',sans-serif", fontSize:24, fontWeight:900, color:"#fff" }}>Votre mois est terminé</h2>
-      <p style={{ fontSize:14, color:"#9CA3AF", lineHeight:1.7 }}>Renouvelez votre abonnement <strong style={{ color:R }}>{plan.name}</strong> pour continuer à recevoir vos commandes et réservations.</p>
+      <h2 style={{ fontFamily:"'Syne',sans-serif", fontSize:24, fontWeight:900, color:"#fff" }}>Activez votre abonnement</h2>
+      <p style={{ fontSize:14, color:"#9CA3AF", lineHeight:1.7 }}>Activez votre abonnement <strong style={{ color:R }}>{plan.name}</strong> pour accéder à votre tableau de bord et recevoir vos commandes.</p>
       <div style={{ background:"#111420", border:`1px solid ${R}40`, borderRadius:16, padding:"18px 22px", width:"100%" }}>
         <div style={{ fontFamily:"'Syne',sans-serif", fontSize:34, fontWeight:900, color:"#fff" }}>{plan.price.toFixed(2).replace(".", ",")}€<span style={{ fontSize:13, color:"#6B7280", fontWeight:600 }}>/mois</span></div>
       </div>
       <button type="button" onClick={payerAbonnement} style={{ width:"100%", padding:"15px", borderRadius:12, background:R, color:"#fff", fontWeight:800, fontSize:15, border:"none", cursor:"pointer", fontFamily:"inherit" }}>💳 Payer avec SumUp</button>
-      <p style={{ fontSize:12, color:"#555B6E", lineHeight:1.6 }}>Après votre paiement, votre accès est réactivé dès validation. En cas de souci, contactez-nous.</p>
+      <p style={{ fontSize:12, color:"#555B6E", lineHeight:1.6 }}>Après votre paiement, votre accès est activé automatiquement. En cas de souci, contactez-nous.</p>
       <button type="button" onClick={onLogout} style={{ background:"none", border:"none", color:"#6B7280", fontSize:13, cursor:"pointer", textDecoration:"underline", fontFamily:"inherit" }}>Se déconnecter</button>
     </div>
   );
