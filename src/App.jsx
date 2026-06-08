@@ -46,11 +46,18 @@ const SUMUP_LINK = "https://pay.sumup.com/b2c/REMPLACE-MOI";
 // Lance le paiement : crée un checkout SumUp côté serveur puis redirige le client
 async function payerAbonnement() {
   try {
-    const { data } = await supabase.functions.invoke("creer-paiement", { body: {} });
+    const { data, error } = await supabase.functions.invoke("creer-paiement", { body: {} });
+    if (error) {
+      let detail = error.message || String(error);
+      try { const body = await error.context.json(); if (body?.error) detail = typeof body.error === "string" ? body.error : JSON.stringify(body.error); } catch (_) {}
+      alert("Erreur paiement : " + detail);
+      return;
+    }
     if (data?.url) { window.location.href = data.url; return; }
-  } catch (e) { /* fonction non déployée → on tente le lien de secours */ }
-  if (SUMUP_LINK && !SUMUP_LINK.includes("REMPLACE")) window.open(SUMUP_LINK, "_blank");
-  else alert("Le paiement n'est pas encore configuré. Réessaie dans un instant.");
+    alert("Réponse inattendue : " + JSON.stringify(data));
+  } catch (e) {
+    alert("Erreur paiement : " + (e?.message || String(e)));
+  }
 }
 
 // ── Base de données Supabase (liée au compte connecté) ─
