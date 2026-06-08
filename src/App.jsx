@@ -40,6 +40,19 @@ const PLANS = [
   { key:"premium", name:"Premium", price:79.90, features:["SMS automatique sur appel manqué","Lien de commande envoyé par SMS","Chatbot commande + réservation","Dashboard cuisine temps réel","SMS illimités","Installation faite par un technicien (panel admin configuré pour vous)"], missing:[] },
 ];
 
+// ⚠️ Lien de secours (si les fonctions serveur ne sont pas encore déployées)
+const SUMUP_LINK = "https://pay.sumup.com/b2c/REMPLACE-MOI";
+
+// Lance le paiement : crée un checkout SumUp côté serveur puis redirige le client
+async function payerAbonnement() {
+  try {
+    const { data } = await supabase.functions.invoke("creer-paiement", { body: {} });
+    if (data?.url) { window.location.href = data.url; return; }
+  } catch (e) { /* fonction non déployée → on tente le lien de secours */ }
+  if (SUMUP_LINK && !SUMUP_LINK.includes("REMPLACE")) window.open(SUMUP_LINK, "_blank");
+  else alert("Le paiement n'est pas encore configuré. Réessaie dans un instant.");
+}
+
 // ── Base de données Supabase (liée au compte connecté) ─
 let _orders = [];
 let _subs = [];
@@ -133,6 +146,13 @@ export default function AdBarth() {
     const params = new URLSearchParams(window.location.search);
     const rid = params.get("r");
     if (rid) { setPublicResto(rid); setUserId(rid); setPage("chatbot"); setReady(true); return; }
+    const justPaid = params.get("paye") === "1";
+    if (justPaid) {
+      // Nettoie l'URL et re-vérifie l'abonnement après quelques secondes (le temps que SumUp confirme)
+      window.history.replaceState({}, "", window.location.pathname);
+      setTimeout(() => supabase.auth.getSession().then(({ data }) => { if (data?.session?.user) applySession(data.session.user); }), 4000);
+      alert("✅ Merci ! Votre paiement est en cours de validation. Votre accès se débloque dans une minute — rechargez la page si besoin.");
+    }
     const isRecovery = window.location.hash.includes("type=recovery") || params.get("type") === "recovery";
     supabase.auth.getSession().then(({ data }) => {
       if (isRecovery) { setPage("reset"); setReady(true); return; }
@@ -156,11 +176,13 @@ export default function AdBarth() {
       resto: data?.resto || authUser.user_metadata?.resto || "Mon restaurant",
       phone: data?.telephone || authUser.user_metadata?.telephone || "",
       plan: data?.plan || authUser.user_metadata?.plan || "starter",
+      aboFin: data?.abonnement_fin || null,
     };
     setUser(u); db.reload(); setPage("admin");
   }
   const logout = async () => { await supabase.auth.signOut(); setUser(null); setUserId(null); setPage("login"); };
   const go = p => { setPage(p); window.scrollTo(0, 0); };
+  const locked = !!(user && user.aboFin && new Date(user.aboFin).getTime() < Date.now());
   if (!ready) return <><style>{CSS}</style><div style={{ minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", background:"#09090F" }}><Spinner /></div></>;
   return (
     <><style>{CSS}</style>
@@ -170,10 +192,11 @@ export default function AdBarth() {
       {page === "landing" && <Landing go={go} />}
       {page === "pricing" && <Pricing go={go} onPick={p => { setPlan(p); go("signup"); }} />}
       {page === "signup" && <Signup go={go} plan={plan} onLogged={applySession} />}
-      {page === "admin" && <Admin user={user} go={go} onLogout={logout} orders={orders} />}
-      {page === "simulator" && <Simulator go={go} user={user} />}
+      {page === "admin" && (locked ? <Renew go={go} user={user} onLogout={logout} /> : <Admin user={user} go={go} onLogout={logout} orders={orders} />)}
+      {page === "simulator" && (locked ? <Renew go={go} user={user} onLogout={logout} /> : <Simulator go={go} user={user} />)}
       {page === "chatbot" && <Chatbot go={go} user={user} restoId={publicResto || user?.id} isPublic={!!publicResto} />}
-      {page === "dashboard" && <Dashboard go={go} orders={orders} user={user} />}
+      {page === "dashboard" && (locked ? <Renew go={go} user={user} onLogout={logout} /> : <Dashboard go={go} orders={orders} user={user} />)}
+      {(page === "mentions" || page === "cgv" || page === "confidentialite") && <Legal doc={page} go={go} />}
     </div></>
   );
 }
@@ -445,8 +468,8 @@ function Landing({ go }) {
       <footer style={{ borderTop:"1px solid #181824", padding:"26px 5vw", display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:14 }}>
         <Logo />
         <div style={{ fontSize:13, color:"#555B6E" }}>© 2025 AdBarth · Tous droits réservés</div>
-        <div style={{ display:"flex", gap:20 }}>
-          {["Mentions légales", "CGV", "Confidentialité", "Contact"].map(l => (<span key={l} style={{ fontSize:13, color:"#555B6E", cursor:"pointer" }}>{l}</span>))}
+        <div style={{ display:"flex", gap:20, flexWrap:"wrap" }}>
+          {[{ l:"Mentions légales", p:"mentions" }, { l:"CGV", p:"cgv" }, { l:"Confidentialité", p:"confidentialite" }].map(x => (<span key={x.p} onClick={() => go(x.p)} style={{ fontSize:13, color:"#555B6E", cursor:"pointer" }}>{x.l}</span>))}
         </div>
       </footer>
     </div>
@@ -517,7 +540,7 @@ function Signup({ go, plan, onLogged }) {
       return;
     }
     if (data?.user) {
-      await supabase.from("comptes").update({ plan: chosenPlan.key, prix: Math.round(chosenPlan.price) }).eq("id", data.user.id);
+      await supabase.from("comptes").update({ plan: chosenPlan.key, prix: Math.round(chosenPlan.price), abonnement_fin: new Date(Date.now() + 30 * 864e5).toISOString() }).eq("id", data.user.id);
       if (data.session) { onLogged(data.user); }
       else { setErr("Compte créé ! Vérifiez votre email pour confirmer, puis connectez-vous."); }
     }
@@ -587,6 +610,8 @@ function Admin({ user, go, onLogout, orders = [] }) {
   }, []);
   const accent = cfg.color;
   const publicLink = (typeof window !== "undefined" && user?.id) ? `${window.location.origin}/?r=${user.id}` : "";
+  const aboFin = user?.aboFin ? new Date(user.aboFin) : null;
+  const daysLeft = aboFin ? Math.ceil((aboFin.getTime() - Date.now()) / 86400000) : null;
   useEffect(() => { if (tab === "stats") db.reload(); }, [tab]);
   const cmdList = orders.filter(o => o.type === "commande");
   const resList = orders.filter(o => o.type === "reservation");
@@ -646,6 +671,12 @@ function Admin({ user, go, onLogout, orders = [] }) {
           <div style={{ fontSize:12, color:"#9CA3AF", marginTop:1 }}>Commencez par renseigner les infos de votre restaurant, puis ajoutez votre menu.</div>
         </div>
       </div>
+      {daysLeft !== null && daysLeft <= 5 && (
+        <div style={{ background:`${OR}18`, borderBottom:`1px solid ${OR}50`, padding:"10px 16px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:10, flexWrap:"wrap" }}>
+          <span style={{ fontSize:13, fontWeight:700, color:OR }}>⏳ Votre abonnement expire dans {daysLeft <= 0 ? "moins d'un jour" : `${daysLeft} jour${daysLeft > 1 ? "s" : ""}`}.</span>
+          <button type="button" onClick={payerAbonnement} style={{ padding:"7px 14px", borderRadius:20, background:R, color:"#fff", fontSize:12, fontWeight:700, border:"none", cursor:"pointer", fontFamily:"inherit" }}>Renouveler →</button>
+        </div>
+      )}
       <div style={{ display:"flex", background:"#09090F", borderBottom:"1px solid #181824", overflowX:"auto" }}>
         {TABS.map(t => (<button key={t.k} onClick={() => setTab(t.k)} style={{ flex:1, minWidth:60, padding:"10px 4px", background:"none", border:"none", borderBottom: tab === t.k ? `2px solid ${accent}` : "2px solid transparent", color: tab === t.k ? accent : "#6B7280", fontSize:10, fontWeight:700, cursor:"pointer", display:"flex", flexDirection:"column", alignItems:"center", gap:3 }}><span style={{ fontSize:16 }}>{t.i}</span>{t.l}</button>))}
       </div>
@@ -780,9 +811,12 @@ function Admin({ user, go, onLogout, orders = [] }) {
             {[{ l:"Commandes", v:String(cmdList.length), i:"🍔" },{ l:"Réservations", v:String(resList.length), i:"📅" },{ l:"CA commandes", v:`${ca.toFixed(2).replace(".", ",")}€`, i:"💰" },{ l:"Total reçus", v:String(orders.length), i:"📈" },{ l:"SMS envoyés", v:"—", i:"💬" },{ l:"Clics chatbot", v:"—", i:"👆" }].map(s => (<div key={s.l} style={{ background:"#111420", border:"1px solid #181824", borderRadius:16, padding:"18px 16px" }}><div style={{ fontSize:22, marginBottom:8 }}>{s.i}</div><div style={{ fontFamily:"'Syne',sans-serif", fontSize:28, fontWeight:900, color:accent, lineHeight:1 }}>{s.v}</div><div style={{ fontSize:11, color:"#6B7280", marginTop:7, fontWeight:600 }}>{s.l}</div></div>))}
           </div>
           <p style={{ fontSize:11, color:"#555B6E", textAlign:"center", lineHeight:1.6 }}>« SMS envoyés » et « Clics » s'afficheront quand le vrai système SMS sera branché.</p>
-          <div style={{ background:"#111420", border:"1px solid #181824", borderRadius:16, padding:20, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-            <div><div style={{ fontSize:16, fontWeight:800 }}>Plan {planName}</div><div style={{ fontSize:12, color:"#6B7280", marginTop:3 }}>Abonnement actif · Renouvellement mensuel</div></div>
-            <div style={{ fontFamily:"'Syne',sans-serif", fontSize:22, fontWeight:900, color:accent }}>{planPrice.toFixed(2).replace(".", ",")}€<span style={{ fontSize:12, color:"#6B7280", fontWeight:600 }}>/mois</span></div>
+          <div style={{ background:"#111420", border:"1px solid #181824", borderRadius:16, padding:20 }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+              <div><div style={{ fontSize:16, fontWeight:800 }}>Plan {planName}</div><div style={{ fontSize:12, color: daysLeft !== null && daysLeft <= 5 ? OR : "#6B7280", marginTop:3 }}>{aboFin ? `Actif jusqu'au ${aboFin.toLocaleDateString("fr-FR")} · ${daysLeft <= 0 ? "expiré" : daysLeft + " jour" + (daysLeft > 1 ? "s" : "") + " restant" + (daysLeft > 1 ? "s" : "")}` : "Abonnement mensuel"}</div></div>
+              <div style={{ fontFamily:"'Syne',sans-serif", fontSize:22, fontWeight:900, color:accent }}>{planPrice.toFixed(2).replace(".", ",")}€<span style={{ fontSize:12, color:"#6B7280", fontWeight:600 }}>/mois</span></div>
+            </div>
+            <button type="button" onClick={payerAbonnement} style={{ display:"block", width:"100%", textAlign:"center", marginTop:14, padding:"11px", borderRadius:10, background: daysLeft !== null && daysLeft <= 5 ? R : "#181824", color:"#fff", fontWeight:700, fontSize:13, border: daysLeft !== null && daysLeft <= 5 ? "none" : "1px solid #252836", cursor:"pointer", fontFamily:"inherit" }}>💳 Renouveler avec SumUp</button>
           </div>
         </>}
       </div>
@@ -1041,6 +1075,7 @@ function Chatbot({ go, user, restoId, isPublic }) {
         <div ref={ref} />
       </div>
       {curQR.length > 0 && !done && (<div style={{ padding:"8px 14px", display:"flex", gap:8, overflowX:"auto", borderTop:"1px solid #181824", background:"#09090F" }}>{curQR.map(r => (<button key={r} type="button" onClick={() => q(r)} style={{ flexShrink:0, padding:"8px 14px", borderRadius:22, background:"#111420", border:`1px solid ${R}50`, color:R, fontSize:13, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap", fontFamily:"inherit" }}>{r}</button>))}</div>)}
+      {isPublic && <p style={{ fontSize:10, color:"#555B6E", textAlign:"center", padding:"6px 16px 0", background:"#09090F" }}>En validant une commande, vous acceptez le traitement de vos informations pour la gérer. <span onClick={() => go("confidentialite")} style={{ color:"#9CA3AF", textDecoration:"underline", cursor:"pointer" }}>Confidentialité</span></p>}
       <div style={{ padding:"10px 14px 24px", background:"#09090F", borderTop:"1px solid #181824", display:"flex", gap:10, alignItems:"center" }}>
         <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === "Enter" && send()} placeholder="Écrivez votre message…" maxLength={200} style={{ flex:1, background:"#111420", border:"1.5px solid #252836", borderRadius:14, color:"#E8EAF0", fontSize:14, padding:"12px 14px", fontFamily:"inherit" }} />
         <button type="button" onClick={send} disabled={!input.trim()} style={{ width:46, height:46, borderRadius:13, flexShrink:0, background: input.trim() ? R : "#252836", border:"none", cursor: input.trim() ? "pointer" : "not-allowed", display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, color:"#fff" }}>➤</button>
@@ -1173,6 +1208,92 @@ function OrderCard({ o, i }) {
           {isPret && (<button type="button" onClick={() => upd("termine")} style={{ padding:"9px 20px", borderRadius:10, background:"#181824", color:"#9CA3AF", border:"1px solid #252836", fontWeight:700, fontSize:13, cursor:"pointer", fontFamily:"inherit" }}>Terminer</button>)}
         </div>
       </div>
+    </div>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════
+// PAGES LÉGALES (modèles à compléter)
+// ═════════════════════════════════════════════════════════════════════
+const LEGAL_DOCS = {
+  mentions: {
+    title: "Mentions légales",
+    sections: [
+      { h: "Éditeur du site", p: "Le site AdBarth est édité par [NOM DE LA SOCIÉTÉ], [FORME JURIDIQUE] au capital de [MONTANT] €, dont le siège social est situé [ADRESSE COMPLÈTE].\nImmatriculée au RCS de [VILLE] sous le numéro [SIREN].\nN° de TVA intracommunautaire : [N° TVA].\nE-mail : [EMAIL] — Téléphone : [TÉLÉPHONE]." },
+      { h: "Directeur de la publication", p: "[PRÉNOM NOM], en qualité de [FONCTION]." },
+      { h: "Hébergement", p: "Le site est hébergé par Vercel Inc., 340 S Lemon Ave #4133, Walnut, CA 91789, États-Unis.\nLes données sont stockées via Supabase, Inc., sur une infrastructure située dans l'Union européenne (région eu-central-1)." },
+      { h: "Propriété intellectuelle", p: "L'ensemble des contenus du site (textes, marques, logos, interface) est protégé. Toute reproduction sans autorisation est interdite." },
+      { h: "Contact", p: "Pour toute question : [EMAIL]." },
+    ],
+  },
+  cgv: {
+    title: "Conditions Générales de Vente",
+    sections: [
+      { h: "Article 1 — Objet", p: "Les présentes conditions régissent l'abonnement au service AdBarth, proposé par [NOM DE LA SOCIÉTÉ] aux professionnels du secteur de la restauration." },
+      { h: "Article 2 — Service", p: "AdBarth fournit : l'envoi d'un SMS automatique sur appel manqué, un lien de commande, un chatbot de commande et de réservation, et un tableau de bord de cuisine." },
+      { h: "Article 3 — Tarifs", p: "Starter : 29,90 € / mois. Pro : 49,90 € / mois. Premium : 79,90 € / mois. Prix indiqués [HT / TTC — à préciser]. Sans engagement de durée." },
+      { h: "Article 4 — Paiement", p: "L'abonnement est payable mensuellement d'avance par [moyen de paiement]. Tout mois commencé est dû." },
+      { h: "Article 5 — Durée et résiliation", p: "L'abonnement est mensuel, sans engagement. Il peut être résilié à tout moment ; la résiliation prend effet à la fin de la période en cours." },
+      { h: "Article 6 — Droit de rétractation", p: "Le service étant destiné à des professionnels dans le cadre de leur activité, le droit de rétractation de 14 jours applicable aux consommateurs ne s'applique pas, sauf accord particulier." },
+      { h: "Article 7 — Responsabilité", p: "AdBarth s'engage à fournir le service avec diligence. Sa responsabilité ne saurait être engagée en cas d'interruption indépendante de sa volonté (panne d'un service tiers, opérateur télécom, etc.)." },
+      { h: "Article 8 — Données personnelles", p: "Le traitement des données est décrit dans la Politique de confidentialité." },
+      { h: "Article 9 — Droit applicable", p: "Les présentes sont soumises au droit français. À défaut d'accord amiable, tout litige relève des tribunaux compétents de [VILLE]." },
+    ],
+  },
+  confidentialite: {
+    title: "Politique de confidentialité",
+    sections: [
+      { h: "Rôles", p: "Chaque restaurant client est responsable du traitement des données de ses propres clients. [NOM DE LA SOCIÉTÉ] agit en tant que sous-traitant technique, au sens du RGPD." },
+      { h: "Données collectées", p: "Comptes restaurateurs : nom, e-mail, téléphone, nom du restaurant.\nClients finaux (via le chatbot) : numéro de téléphone et détails de la commande ou de la réservation." },
+      { h: "Finalités", p: "Gérer les comptes, envoyer le SMS suite à un appel manqué, traiter les commandes et réservations, et afficher les commandes en cuisine." },
+      { h: "Base légale", p: "Exécution du service et intérêt légitime. Toute prospection commerciale par SMS nécessite le consentement préalable du client." },
+      { h: "SMS", p: "Le SMS est envoyé en réponse à un appel du client vers le restaurant. Les numéros ne sont pas utilisés à des fins publicitaires sans consentement explicite." },
+      { h: "Durée de conservation", p: "Les commandes et réservations sont conservées [12 mois par défaut], puis supprimées. Les coordonnées des clients ne sont pas conservées au-delà de cette durée sans consentement." },
+      { h: "Destinataires", p: "Les données sont accessibles au restaurant concerné et aux sous-traitants techniques (hébergement : Vercel, Supabase)." },
+      { h: "Vos droits", p: "Vous disposez d'un droit d'accès, de rectification, d'effacement, de limitation, de portabilité et d'opposition. Pour les exercer : [EMAIL]." },
+      { h: "Réclamation", p: "Vous pouvez introduire une réclamation auprès de la CNIL (www.cnil.fr)." },
+      { h: "Cookies", p: "Le site n'utilise que les technologies strictement nécessaires à son fonctionnement (authentification)." },
+    ],
+  },
+};
+function Legal({ doc, go }) {
+  const d = LEGAL_DOCS[doc] || LEGAL_DOCS.mentions;
+  return (
+    <div style={{ minHeight:"100vh", maxWidth:760, margin:"0 auto" }}>
+      <TopBar title={d.title} onBack={() => go("landing")} />
+      <div style={{ padding:"24px 20px 60px" }}>
+        <div style={{ background:`${OR}12`, border:`1px solid ${OR}40`, borderRadius:12, padding:14, marginBottom:24, fontSize:13, color:"#E8EAF0", lineHeight:1.6 }}>
+          ⚠️ Modèle à compléter : remplacez les champs entre crochets […] par vos informations réelles, et faites relire ce document par un professionnel avant la mise en ligne.
+        </div>
+        {d.sections.map((s, i) => (
+          <div key={i} style={{ marginBottom:22 }}>
+            {s.h && <h3 style={{ fontFamily:"'Syne',sans-serif", fontSize:17, fontWeight:800, color:"#fff", marginBottom:8 }}>{s.h}</h3>}
+            <p style={{ fontSize:14, color:"#C8CAD4", lineHeight:1.8, whiteSpace:"pre-wrap" }}>{s.p}</p>
+          </div>
+        ))}
+        <p style={{ fontSize:12, color:"#555B6E", marginTop:30 }}>Dernière mise à jour : [à compléter].</p>
+      </div>
+    </div>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════
+// RENOUVELLEMENT D'ABONNEMENT (SumUp)
+// ═════════════════════════════════════════════════════════════════════
+function Renew({ go, user, onLogout }) {
+  const plan = PLANS.find(p => p.key === user?.plan) || PLANS[0];
+  return (
+    <div style={{ minHeight:"100vh", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:24, textAlign:"center", gap:16, maxWidth:440, margin:"0 auto" }}>
+      <Logo size={26} />
+      <div style={{ fontSize:52, marginTop:6 }}>⏳</div>
+      <h2 style={{ fontFamily:"'Syne',sans-serif", fontSize:24, fontWeight:900, color:"#fff" }}>Votre mois est terminé</h2>
+      <p style={{ fontSize:14, color:"#9CA3AF", lineHeight:1.7 }}>Renouvelez votre abonnement <strong style={{ color:R }}>{plan.name}</strong> pour continuer à recevoir vos commandes et réservations.</p>
+      <div style={{ background:"#111420", border:`1px solid ${R}40`, borderRadius:16, padding:"18px 22px", width:"100%" }}>
+        <div style={{ fontFamily:"'Syne',sans-serif", fontSize:34, fontWeight:900, color:"#fff" }}>{plan.price.toFixed(2).replace(".", ",")}€<span style={{ fontSize:13, color:"#6B7280", fontWeight:600 }}>/mois</span></div>
+      </div>
+      <button type="button" onClick={payerAbonnement} style={{ width:"100%", padding:"15px", borderRadius:12, background:R, color:"#fff", fontWeight:800, fontSize:15, border:"none", cursor:"pointer", fontFamily:"inherit" }}>💳 Payer avec SumUp</button>
+      <p style={{ fontSize:12, color:"#555B6E", lineHeight:1.6 }}>Après votre paiement, votre accès est réactivé dès validation. En cas de souci, contactez-nous.</p>
+      <button type="button" onClick={onLogout} style={{ background:"none", border:"none", color:"#6B7280", fontSize:13, cursor:"pointer", textDecoration:"underline", fontFamily:"inherit" }}>Se déconnecter</button>
     </div>
   );
 }
