@@ -915,14 +915,14 @@ function Admin({ user, go, onLogout, orders = [] }) {
   return (
     <div style={{ minHeight:"100vh", display:"flex", flexDirection:"column", maxWidth:"100%", margin:"0 auto" }}>
       {toast && (<div className="fu" style={{ position:"fixed", bottom:28, left:"50%", transform:"translateX(-50%)", background:V, color:"#fff", padding:"10px 24px", borderRadius:22, fontSize:13, fontWeight:700, zIndex:300, maxWidth:"90%", textAlign:"center" }}>{toast}</div>)}
-      <div style={{ background:"#181320", borderBottom:"1px solid #241D2F", padding:"12px 16px", display:"flex", alignItems:"center", justifyContent:"space-between", position:"sticky", top:0, zIndex:20 }}>
+      <div className="glass" style={{ borderBottom:`1px solid ${LINE}`, padding:"12px 16px", display:"flex", alignItems:"center", justifyContent:"space-between", position:"sticky", top:0, zIndex:20, gap:12, flexWrap:"wrap" }}>
         <div>
           <div style={{ display:"flex", alignItems:"center", gap:8 }}>
             <Logo size={16} />
-            <span style={{ fontSize:10, fontWeight:700, color:"#8A8295", background:"#241D2F", border:"1px solid #34293F", borderRadius:20, padding:"2px 10px", letterSpacing:.5 }}>ADMIN</span>
+            <span style={{ fontSize:10, fontWeight:700, color:MUT, background:LINE, border:`1px solid ${LINE2}`, borderRadius:20, padding:"2px 10px", letterSpacing:.5 }}>ADMIN</span>
             <span style={{ fontSize:10, fontWeight:800, color:R, background:`${R}18`, border:`1px solid ${R}45`, borderRadius:20, padding:"2px 10px" }}>{planName}</span>
           </div>
-          <div style={{ fontSize:11, color:"#8A8295", marginTop:2 }}>{cfg.name || user?.resto}</div>
+          <div style={{ fontSize:11, color:MUT, marginTop:3 }}>{cfg.name || user?.resto}</div>
         </div>
         <div style={{ display:"flex", gap:7, alignItems:"center", flexWrap:"wrap" }}>
           <AdminBtn color={R} onClick={() => go("simulator")}>📞 Test</AdminBtn>
@@ -945,10 +945,10 @@ function Admin({ user, go, onLogout, orders = [] }) {
           <button type="button" onClick={payerAbonnement} style={{ padding:"7px 14px", borderRadius:20, background:R, color:"#fff", fontSize:12, fontWeight:700, border:"none", cursor:"pointer", fontFamily:"inherit" }}>Renouveler →</button>
         </div>
       )}
-      <div style={{ display:"flex", background:"#0B0910", borderBottom:"1px solid #241D2F", overflowX:"auto" }}>
-        {TABS.map(t => (<button key={t.k} onClick={() => setTab(t.k)} style={{ flex:1, minWidth:60, padding:"10px 4px", background:"none", border:"none", borderBottom: tab === t.k ? `2px solid ${accent}` : "2px solid transparent", color: tab === t.k ? accent : "#8A8295", fontSize:10, fontWeight:700, cursor:"pointer", display:"flex", flexDirection:"column", alignItems:"center", gap:3 }}><span style={{ fontSize:16 }}>{t.i}</span>{t.l}</button>))}
+      <div style={{ display:"flex", background:BG, borderBottom:`1px solid ${LINE}`, overflowX:"auto", position:"sticky", top:0, zIndex:15 }}>
+        {TABS.map(t => { const on = tab === t.k; return (<button key={t.k} onClick={() => setTab(t.k)} style={{ flex:1, minWidth:62, padding:"11px 4px 9px", background: on ? `${accent}12` : "none", border:"none", borderBottom: on ? `2px solid ${accent}` : "2px solid transparent", color: on ? accent : MUT, fontSize:10, fontWeight:700, cursor:"pointer", display:"flex", flexDirection:"column", alignItems:"center", gap:4, transition:`all .25s ${EASE}` }}><span style={{ fontSize:17, filter: on ? "none" : "grayscale(.4) opacity(.8)" }}>{t.i}</span>{t.l}</button>); })}
       </div>
-      <div style={{ flex:1, overflowY:"auto", padding:16, display:"flex", flexDirection:"column", gap:16 }}>
+      <div style={{ flex:1, overflowY:"auto", padding:"18px 16px", display:"flex", flexDirection:"column", gap:16, width:"100%", maxWidth:880, margin:"0 auto" }}>
         {tab === "infos" && <>
           <STitle>Informations du restaurant</STitle>
           <Card>
@@ -1076,7 +1076,7 @@ function Admin({ user, go, onLogout, orders = [] }) {
         {tab === "stats" && <>
           <STitle>Statistiques du mois</STitle>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
-            {[{ l:"Commandes", v:String(cmdList.length), i:"🍔" },{ l:"Réservations", v:String(resList.length), i:"📅" },{ l:"CA commandes", v:`${ca.toFixed(2).replace(".", ",")}€`, i:"💰" },{ l:"Total reçus", v:String(orders.length), i:"📈" },{ l:"SMS envoyés", v:"—", i:"💬" },{ l:"Clics chatbot", v:"—", i:"👆" }].map(s => (<div key={s.l} style={{ background:"#181320", border:"1px solid #241D2F", borderRadius:16, padding:"18px 16px" }}><div style={{ fontSize:22, marginBottom:8 }}>{s.i}</div><div style={{ fontFamily:"'Syne',sans-serif", fontSize:28, fontWeight:900, color:accent, lineHeight:1 }}>{s.v}</div><div style={{ fontSize:11, color:"#8A8295", marginTop:7, fontWeight:600 }}>{s.l}</div></div>))}
+            {[{ l:"Commandes", v:String(cmdList.length), i:"🍔" },{ l:"Réservations", v:String(resList.length), i:"📅" },{ l:"CA commandes", v:`${ca.toFixed(2).replace(".", ",")}€`, i:"💰" },{ l:"Total reçus", v:String(orders.length), i:"📈" },{ l:"SMS envoyés", v:"—", i:"💬" },{ l:"Clics chatbot", v:"—", i:"👆" }].map(s => (<div key={s.l} className="lift" style={{ background:`linear-gradient(160deg, ${PANEL}, ${BG2})`, border:`1px solid ${LINE}`, borderRadius:18, padding:"20px 16px" }}><div style={{ fontSize:23, marginBottom:10 }}>{s.i}</div><div style={{ fontFamily:"'Syne',sans-serif", fontSize:30, fontWeight:800, color:accent, lineHeight:1 }}>{s.v}</div><div style={{ fontSize:11.5, color:MUT, marginTop:8, fontWeight:600 }}>{s.l}</div></div>))}
           </div>
           <p style={{ fontSize:11, color:"#6B6378", textAlign:"center", lineHeight:1.6 }}>« SMS envoyés » et « Clics » s'afficheront quand le vrai système SMS sera branché.</p>
           <div style={{ background:"#181320", border:"1px solid #241D2F", borderRadius:16, padding:20 }}>
