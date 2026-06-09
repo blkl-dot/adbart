@@ -358,9 +358,9 @@ function Login({ go, onLogged }) {
     setMsg("Si un compte existe pour cet email, un lien de réinitialisation vient d'être envoyé. Vérifiez votre boîte mail.");
   }
   return (
-    <div style={{ minHeight:"100vh", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:24 }}>
-      <div style={{ marginBottom:30 }}><Logo size={28} /></div>
-      <div style={{ width:"100%", maxWidth:380, background:"#181320", border:"1px solid #241D2F", borderRadius:20, padding:28 }}>
+    <div className="grain" style={{ minHeight:"100vh", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:24, position:"relative", background:`radial-gradient(ellipse 70% 45% at 50% 0%, ${R}16, transparent 62%)` }}>
+      <div className="fu" style={{ marginBottom:28 }}><Logo size={30} /></div>
+      <div className="fu" style={{ width:"100%", maxWidth:392, background:PANEL, border:`1px solid ${LINE2}`, borderRadius:22, padding:30, boxShadow:`0 34px 80px -34px ${R}44, 0 1px 0 #ffffff0a inset`, position:"relative", animationDelay:".06s" }}>
         {mode === "login" ? <>
           <h2 style={{ fontFamily:"'Syne',sans-serif", fontSize:24, fontWeight:900, marginBottom:6, color:"#fff" }}>Connexion</h2>
           <p style={{ fontSize:13, color:"#8A8295", marginBottom:24 }}>Accédez à votre espace restaurateur.</p>
@@ -418,9 +418,9 @@ function Reset({ go, onLogged }) {
     if (data?.user) setTimeout(() => onLogged(data.user), 900);
   }
   return (
-    <div style={{ minHeight:"100vh", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:24 }}>
-      <div style={{ marginBottom:30 }}><Logo size={28} /></div>
-      <div style={{ width:"100%", maxWidth:380, background:"#181320", border:"1px solid #241D2F", borderRadius:20, padding:28 }}>
+    <div className="grain" style={{ minHeight:"100vh", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:24, position:"relative", background:`radial-gradient(ellipse 70% 45% at 50% 0%, ${R}16, transparent 62%)` }}>
+      <div className="fu" style={{ marginBottom:28 }}><Logo size={30} /></div>
+      <div className="fu" style={{ width:"100%", maxWidth:392, background:PANEL, border:`1px solid ${LINE2}`, borderRadius:22, padding:30, boxShadow:`0 34px 80px -34px ${R}44, 0 1px 0 #ffffff0a inset`, position:"relative", animationDelay:".06s" }}>
         <h2 style={{ fontFamily:"'Syne',sans-serif", fontSize:24, fontWeight:900, marginBottom:6, color:"#fff" }}>Nouveau mot de passe</h2>
         <p style={{ fontSize:13, color:"#8A8295", marginBottom:24 }}>Choisissez un nouveau mot de passe pour votre compte.</p>
         <form onSubmit={submit} style={{ display:"flex", flexDirection:"column", gap:14 }}>
@@ -745,34 +745,38 @@ function Landing({ go }) {
 // ═════════════════════════════════════════════════════════════════════
 function Pricing({ go, onPick }) {
   return (
-    <div style={{ minHeight:"100vh", paddingBottom:60 }}>
+    <div className="grain" style={{ minHeight:"100vh", paddingBottom:60, background:`radial-gradient(ellipse 60% 40% at 50% 0%, ${R}10, transparent 60%)` }}>
       <StepNav title="Choisissez votre plan" onBack={() => go("landing")} step={1} of={2} />
-      <div style={{ padding:"40px 20px", maxWidth:960, margin:"0 auto" }}>
+      <div style={{ padding:"clamp(36px,6vw,56px) 20px 40px", maxWidth:980, margin:"0 auto" }}>
         <div style={{ textAlign:"center", marginBottom:48 }}>
-          <h2 style={{ fontFamily:"'Syne',sans-serif", fontSize:"clamp(22px,3.5vw,40px)", fontWeight:900, letterSpacing:"-1px", marginBottom:12 }}>Simple. Transparent. Sans surprise.</h2>
-          <p style={{ color:"#8A8295", fontSize:15 }}>Pas de commission sur vos commandes. Pas de frais cachés. Juste un forfait fixe.</p>
+          <h2 style={{ fontFamily:"'Syne',sans-serif", fontSize:"clamp(26px,4vw,44px)", fontWeight:800, letterSpacing:"-1.4px", marginBottom:12 }}>Simple. Transparent. <span className="grad-text">Sans surprise.</span></h2>
+          <p style={{ color:MUT, fontSize:15.5, maxWidth:480, margin:"0 auto" }}>Pas de commission sur vos commandes. Pas de frais cachés. Juste un forfait fixe.</p>
         </div>
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(255px,1fr))", gap:20 }}>
-          {PLANS.map(p => (
-            <div key={p.key} style={{ background:"#181320", border:`1.5px solid ${p.popular ? R : "#241D2F"}`, borderRadius:22, padding:28, position:"relative", boxShadow: p.popular ? `0 0 55px ${R}1C` : "none" }}>
-              {p.popular && (<div style={{ position:"absolute", top:-13, left:"50%", transform:"translateX(-50%)", background:R, color:"#fff", padding:"4px 18px", borderRadius:100, fontSize:11, fontWeight:800, whiteSpace:"nowrap" }}>⭐ Le plus choisi</div>)}
-              <div style={{ fontSize:12, fontWeight:700, color:"#8A8295", textTransform:"uppercase", letterSpacing:1, marginBottom:10 }}>{p.name}</div>
-              <div style={{ fontFamily:"'Syne',sans-serif", fontSize:46, fontWeight:900, color:"#fff", lineHeight:1, marginBottom:4 }}>
-                <sup style={{ fontSize:20, verticalAlign:"top", marginTop:8, display:"inline-block" }}>€</sup>{p.price.toFixed(2).replace(".", ",")}
-              </div>
-              <div style={{ fontSize:13, color:"#8A8295", marginBottom:24 }}>par mois · sans engagement</div>
-              <ul style={{ listStyle:"none", display:"flex", flexDirection:"column", gap:10, marginBottom:26 }}>
-                {p.features.map(f => (<li key={f} style={{ fontSize:13, color:"#F2ECE4", display:"flex", gap:9, alignItems:"flex-start" }}><span style={{ color:V, fontWeight:800, flexShrink:0 }}>✓</span>{f}</li>))}
-                {p.missing.map(f => (<li key={f} style={{ fontSize:13, color:"#6B6378", display:"flex", gap:9, alignItems:"flex-start" }}><span style={{ flexShrink:0 }}>—</span>{f}</li>))}
-              </ul>
-              <button onClick={() => onPick(p)} style={{ width:"100%", padding:"14px", borderRadius:12, background: p.popular ? R : "transparent", color: p.popular ? "#fff" : "#F2ECE4", border: p.popular ? "none" : "1.5px solid #34293F", fontFamily:"inherit", fontSize:14, fontWeight:800, cursor:"pointer" }}>Choisir ce plan →</button>
-            </div>
-          ))}
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(255px,1fr))", gap:20, alignItems:"start" }}>
+          {PLANS.map((p, i) => (<Reveal key={p.key} delay={i * 90} style={{ height:"100%" }}><PlanCard p={p} onPick={onPick} /></Reveal>))}
         </div>
-        <p style={{ textAlign:"center", fontSize:13, color:"#A89FB0", marginTop:30 }}>
+        <p style={{ textAlign:"center", fontSize:13, color:MUT, marginTop:30 }}>
           Déjà un compte ? <span onClick={() => go("login")} style={{ color:R, fontWeight:700, cursor:"pointer" }}>Se connecter →</span>
         </p>
       </div>
+    </div>
+  );
+}
+function PlanCard({ p, onPick }) {
+  const [hov, setHov] = useState(false);
+  return (
+    <div className="lift" onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)} style={{ height:"100%", background: p.popular ? `linear-gradient(170deg, #1d1626, ${PANEL})` : PANEL, border:`1.5px solid ${p.popular ? R : hov ? R+"55" : LINE}`, borderRadius:24, padding:30, position:"relative", transform: hov ? "translateY(-6px)" : "none", boxShadow: p.popular ? `0 24px 60px -26px ${R}77` : hov ? `0 18px 44px -26px ${R}55` : "none" }}>
+      {p.popular && (<div style={{ position:"absolute", top:-13, left:"50%", transform:"translateX(-50%)", background:`linear-gradient(135deg,${R},${OR})`, color:"#fff", padding:"5px 18px", borderRadius:100, fontSize:11, fontWeight:800, whiteSpace:"nowrap", boxShadow:`0 8px 20px -6px ${R}88` }}>⭐ Le plus choisi</div>)}
+      <div style={{ fontSize:12, fontWeight:700, color: p.popular ? R : MUT, textTransform:"uppercase", letterSpacing:1.2, marginBottom:12 }}>{p.name}</div>
+      <div style={{ fontFamily:"'Syne',sans-serif", fontSize:50, fontWeight:800, color:"#fff", lineHeight:1, marginBottom:4 }}>
+        <sup style={{ fontSize:21, verticalAlign:"top", marginTop:9, display:"inline-block", color:MUT }}>€</sup>{p.price.toFixed(2).replace(".", ",")}
+      </div>
+      <div style={{ fontSize:13, color:MUT, marginBottom:24 }}>par mois · sans engagement</div>
+      <ul style={{ listStyle:"none", display:"flex", flexDirection:"column", gap:11, marginBottom:26 }}>
+        {p.features.map(f => (<li key={f} style={{ fontSize:13, color:TXT, display:"flex", gap:10, alignItems:"flex-start", lineHeight:1.45 }}><span style={{ color:V, fontWeight:800, flexShrink:0 }}>✓</span>{f}</li>))}
+        {p.missing.map(f => (<li key={f} style={{ fontSize:13, color:FAINT, display:"flex", gap:10, alignItems:"flex-start", lineHeight:1.45 }}><span style={{ flexShrink:0 }}>—</span>{f}</li>))}
+      </ul>
+      <button onClick={() => onPick(p)} className="sheen" style={{ width:"100%", padding:"15px", borderRadius:13, background: p.popular ? `linear-gradient(135deg,${R},${OR})` : "transparent", color: p.popular ? "#fff" : TXT, border: p.popular ? "none" : `1.5px solid ${hov ? R+"77" : LINE2}`, fontFamily:"inherit", fontSize:14, fontWeight:800, cursor:"pointer", boxShadow: p.popular ? `0 8px 22px -10px ${R}88` : "none" }}>Choisir ce plan →</button>
     </div>
   );
 }
@@ -810,15 +814,15 @@ function Signup({ go, plan, onLogged }) {
     }
   }
   return (
-    <div style={{ minHeight:"100vh", paddingBottom:60 }}>
+    <div className="grain" style={{ minHeight:"100vh", paddingBottom:60, background:`radial-gradient(ellipse 60% 36% at 50% 0%, ${R}10, transparent 60%)` }}>
       <StepNav title="Créer votre compte" onBack={() => go("pricing")} step={2} of={2} />
-      <div style={{ padding:"32px 20px", maxWidth:450, margin:"0 auto" }}>
-        <div style={{ background:"#181320", border:"1px solid #241D2F", borderRadius:14, padding:"14px 18px", marginBottom:20, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+      <div style={{ padding:"clamp(28px,5vw,40px) 20px", maxWidth:460, margin:"0 auto" }}>
+        <div className="fu" style={{ background:`linear-gradient(135deg, ${R}14, ${PANEL})`, border:`1px solid ${R}40`, borderRadius:16, padding:"16px 20px", marginBottom:22, display:"flex", justifyContent:"space-between", alignItems:"center", boxShadow:`0 18px 44px -28px ${R}66` }}>
           <div>
-            <div style={{ fontSize:12, color:"#8A8295", fontWeight:700 }}>Plan sélectionné</div>
-            <div style={{ fontFamily:"'Syne',sans-serif", fontSize:20, fontWeight:900, color:R, marginTop:2 }}>{chosenPlan.name}</div>
+            <div style={{ fontSize:11.5, color:MUT, fontWeight:700, textTransform:"uppercase", letterSpacing:.8 }}>Plan sélectionné</div>
+            <div style={{ fontFamily:"'Syne',sans-serif", fontSize:21, fontWeight:800, color:R, marginTop:3 }}>{chosenPlan.name}</div>
           </div>
-          <div style={{ fontFamily:"'Syne',sans-serif", fontSize:24, fontWeight:900 }}>{chosenPlan.price.toFixed(2).replace(".", ",")}€<span style={{ fontSize:12, color:"#8A8295", fontWeight:600 }}>/mois</span></div>
+          <div style={{ fontFamily:"'Syne',sans-serif", fontSize:25, fontWeight:800 }}>{chosenPlan.price.toFixed(2).replace(".", ",")}€<span style={{ fontSize:12, color:MUT, fontWeight:600 }}>/mois</span></div>
         </div>
         <form onSubmit={submit} style={{ display:"flex", flexDirection:"column", gap:13 }}>
           <Field l="Prénom & Nom *"><input value={f.name} onChange={e => setF(v => ({ ...v, name:e.target.value }))} placeholder="Jean Dupont" style={I} /></Field>
@@ -1547,17 +1551,20 @@ function Legal({ doc, go }) {
 function Renew({ go, user, onLogout }) {
   const plan = PLANS.find(p => p.key === user?.plan) || PLANS[0];
   return (
-    <div style={{ minHeight:"100vh", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:24, textAlign:"center", gap:16, maxWidth:440, margin:"0 auto" }}>
-      <Logo size={26} />
-      <div style={{ fontSize:52, marginTop:6 }}>⏳</div>
-      <h2 style={{ fontFamily:"'Syne',sans-serif", fontSize:24, fontWeight:900, color:"#fff" }}>Activez votre abonnement</h2>
-      <p style={{ fontSize:14, color:"#A89FB0", lineHeight:1.7 }}>Activez votre abonnement <strong style={{ color:R }}>{plan.name}</strong> pour accéder à votre tableau de bord et recevoir vos commandes.</p>
-      <div style={{ background:"#181320", border:`1px solid ${R}40`, borderRadius:16, padding:"18px 22px", width:"100%" }}>
-        <div style={{ fontFamily:"'Syne',sans-serif", fontSize:34, fontWeight:900, color:"#fff" }}>{plan.price.toFixed(2).replace(".", ",")}€<span style={{ fontSize:13, color:"#8A8295", fontWeight:600 }}>/mois</span></div>
+    <div className="grain" style={{ minHeight:"100vh", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:24, position:"relative", background:`radial-gradient(ellipse 70% 45% at 50% 0%, ${R}18, transparent 62%)` }}>
+      <div className="fu" style={{ display:"flex", flexDirection:"column", alignItems:"center", textAlign:"center", gap:16, maxWidth:430, width:"100%" }}>
+        <Logo size={28} />
+        <div style={{ fontSize:54, marginTop:4, animation: RM?"none":"floaty 5s ease-in-out infinite" }}>🔓</div>
+        <h2 style={{ fontFamily:"'Syne',sans-serif", fontSize:26, fontWeight:800, color:"#fff", letterSpacing:"-.6px" }}>Activez votre abonnement</h2>
+        <p style={{ fontSize:14.5, color:"#A89FB0", lineHeight:1.7 }}>Activez votre abonnement <strong style={{ color:R }}>{plan.name}</strong> pour accéder à votre tableau de bord et recevoir vos commandes en cuisine.</p>
+        <div style={{ background:`linear-gradient(135deg, ${R}16, ${PANEL})`, border:`1px solid ${R}45`, borderRadius:18, padding:"22px", width:"100%", boxShadow:`0 24px 60px -30px ${R}77` }}>
+          <div style={{ fontFamily:"'Syne',sans-serif", fontSize:38, fontWeight:800, color:"#fff" }}>{plan.price.toFixed(2).replace(".", ",")}€<span style={{ fontSize:14, color:MUT, fontWeight:600 }}>/mois</span></div>
+          <div style={{ fontSize:12.5, color:MUT, marginTop:4 }}>sans engagement · résiliable à tout moment</div>
+        </div>
+        <button type="button" onClick={payerAbonnement} className="sheen" style={{ width:"100%", padding:"16px", borderRadius:14, background:`linear-gradient(135deg,${R},${OR})`, color:"#fff", fontWeight:800, fontSize:15.5, border:"none", cursor:"pointer", fontFamily:"inherit", boxShadow:`0 12px 30px -10px ${R}99` }}>💳 Payer avec SumUp</button>
+        <p style={{ fontSize:12, color:FAINT, lineHeight:1.6 }}>Après votre paiement, votre accès est activé automatiquement. En cas de souci, contactez-nous.</p>
+        <button type="button" onClick={onLogout} style={{ background:"none", border:"none", color:MUT, fontSize:13, cursor:"pointer", textDecoration:"underline", fontFamily:"inherit" }}>Se déconnecter</button>
       </div>
-      <button type="button" onClick={payerAbonnement} style={{ width:"100%", padding:"15px", borderRadius:12, background:R, color:"#fff", fontWeight:800, fontSize:15, border:"none", cursor:"pointer", fontFamily:"inherit" }}>💳 Payer avec SumUp</button>
-      <p style={{ fontSize:12, color:"#6B6378", lineHeight:1.6 }}>Après votre paiement, votre accès est activé automatiquement. En cas de souci, contactez-nous.</p>
-      <button type="button" onClick={onLogout} style={{ background:"none", border:"none", color:"#8A8295", fontSize:13, cursor:"pointer", textDecoration:"underline", fontFamily:"inherit" }}>Se déconnecter</button>
     </div>
   );
 }
