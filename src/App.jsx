@@ -313,7 +313,7 @@ export default function AdBarth() {
   const logout = async () => { await supabase.auth.signOut(); setUser(null); setUserId(null); setPage("login"); };
   const go = p => { setPage(p); window.scrollTo(0, 0); };
   const locked = !!(user && user.aboFin && new Date(user.aboFin).getTime() < Date.now());
-  if (!ready) return <><style>{CSS}</style><div style={{ minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", background:"#0B0910" }}><Spinner /></div></>;
+  if (!ready) return <><style>{CSS}</style><div style={{ minHeight:"100vh", display:"flex", flexDirection:"column", gap:18, alignItems:"center", justifyContent:"center", background:BG }}><div className="fu"><Logo size={30} /></div><div className="fu" style={{ animationDelay:".15s" }}><Spinner /></div></div></>;
   return (
     <><style>{CSS}</style>
     <div style={{ minHeight:"100vh", background:"#0B0910", color:"#F2ECE4", fontFamily:"'DM Sans',sans-serif" }}>
@@ -458,11 +458,11 @@ function HeroScene() {
   const accent = step === 4 ? V : step === 1 ? "#EF4444" : R;
   const bubble = (bg, br, extra = {}) => ({ background:bg, border:br, borderRadius:14, padding:"11px 13px", fontSize:12.5, lineHeight:1.6, color:TXT, ...extra });
   return (
-    <div style={{ position:"relative", width:"100%", maxWidth:340, margin:"0 auto" }}>
+    <div style={{ position:"relative", width:"100%", maxWidth:300, margin:"0 auto" }}>
       {/* halos d'ambiance */}
       <div style={{ position:"absolute", inset:"-12% -18%", background:`radial-gradient(circle at 50% 40%, ${accent}26, transparent 62%)`, filter:"blur(8px)", transition:`background .6s ${EASE}`, pointerEvents:"none" }} />
       {/* téléphone */}
-      <div style={{ position:"relative", aspectRatio:"9/18.6", maxHeight:560, background:`linear-gradient(160deg, #1C1626, #120E18)`, borderRadius:38, border:`2px solid ${accent}`, boxShadow:`0 30px 80px -20px ${accent}55, 0 0 0 1px #ffffff08 inset`, padding:13, transition:`border-color .6s ${EASE}, box-shadow .6s ${EASE}`, animation: RM ? "none" : "floaty 6s ease-in-out infinite" }}>
+      <div style={{ position:"relative", aspectRatio:"9/17.6", background:`linear-gradient(160deg, #1C1626, #120E18)`, borderRadius:38, border:`2px solid ${accent}`, boxShadow:`0 30px 80px -20px ${accent}55, 0 0 0 1px #ffffff08 inset`, padding:13, transition:`border-color .6s ${EASE}, box-shadow .6s ${EASE}`, animation: RM ? "none" : "floaty 6s ease-in-out infinite" }}>
         <div style={{ position:"absolute", top:14, left:"50%", transform:"translateX(-50%)", width:74, height:18, background:"#0A0710", borderRadius:12, zIndex:3 }} />
         <div style={{ position:"relative", width:"100%", height:"100%", background:BG, borderRadius:27, overflow:"hidden", display:"flex", flexDirection:"column" }}>
           {/* barre d'état */}
@@ -1534,7 +1534,7 @@ function Legal({ doc, go }) {
           ⚠️ Modèle à compléter : remplacez les champs entre crochets […] par vos informations réelles, et faites relire ce document par un professionnel avant la mise en ligne.
         </div>
         {d.sections.map((s, i) => (
-          <div key={i} style={{ marginBottom:22 }}>
+          <div key={i} style={{ marginBottom:20, paddingLeft:16, borderLeft:`2px solid ${LINE2}` }}>
             {s.h && <h3 style={{ fontFamily:"'Syne',sans-serif", fontSize:17, fontWeight:800, color:"#fff", marginBottom:8 }}>{s.h}</h3>}
             <p style={{ fontSize:14, color:"#D2C9D6", lineHeight:1.8, whiteSpace:"pre-wrap" }}>{s.p}</p>
           </div>
@@ -1587,10 +1587,10 @@ function AdminBtn({ children, onClick, color = R }) {
   return (<button type="button" onClick={onClick} style={{ padding:"6px 11px", borderRadius:8, background:`${color}18`, border:`1px solid ${color}40`, color, fontSize:10, fontWeight:700, cursor:"pointer", fontFamily:"inherit" }}>{children}</button>);
 }
 function StepNav({ title, onBack, step, of }) {
-  return (<div style={{ background:"#181320", borderBottom:"1px solid #241D2F", padding:"14px 16px", display:"flex", alignItems:"center", gap:12, position:"sticky", top:0, zIndex:20 }}><button type="button" onClick={onBack} style={{ background:"#241D2F", border:"none", color:"#F2ECE4", width:36, height:36, borderRadius:10, cursor:"pointer", fontSize:18, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>←</button><div style={{ flex:1 }}><div style={{ fontWeight:800, fontSize:15, color:"#F2ECE4" }}>{title}</div><div style={{ fontSize:11, color:"#8A8295", marginTop:1 }}>Étape {step} sur {of}</div></div><div style={{ display:"flex", gap:5 }}>{Array.from({ length:of }, (_, i) => (<div key={i} style={{ height:7, borderRadius:4, background: i < step ? R : "#34293F", width: i < step ? 22 : 7 }} />))}</div></div>);
+  return (<div className="glass" style={{ borderBottom:`1px solid ${LINE}`, padding:"14px 16px", display:"flex", alignItems:"center", gap:12, position:"sticky", top:0, zIndex:20 }}><button type="button" onClick={onBack} style={{ background:LINE, border:`1px solid ${LINE2}`, color:TXT, width:38, height:38, borderRadius:11, cursor:"pointer", fontSize:18, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>←</button><div style={{ flex:1 }}><div style={{ fontWeight:800, fontSize:15, color:TXT }}>{title}</div><div style={{ fontSize:11, color:MUT, marginTop:1 }}>Étape {step} sur {of}</div></div><div style={{ display:"flex", gap:5 }}>{Array.from({ length:of }, (_, i) => (<div key={i} style={{ height:7, borderRadius:4, background: i < step ? `linear-gradient(90deg,${R},${OR})` : LINE2, width: i < step ? 24 : 7, transition:`all .4s ${EASE}` }}/>))}</div></div>);
 }
 function TopBar({ title, sub, onBack, dot, badge }) {
-  return (<div style={{ padding:"13px 16px", background:"#181320", borderBottom:"1px solid #241D2F", display:"flex", alignItems:"center", gap:12, position:"sticky", top:0, zIndex:10 }}><button type="button" onClick={onBack} style={{ background:"#241D2F", border:"none", color:"#F2ECE4", width:36, height:36, borderRadius:10, cursor:"pointer", fontSize:18, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>←</button><div style={{ flex:1 }}><div style={{ fontWeight:800, fontSize:15, display:"flex", alignItems:"center", gap:8, color:"#F2ECE4" }}>{title}{badge > 0 && <span style={{ background:R, color:"#fff", borderRadius:20, padding:"1px 9px", fontSize:11, fontWeight:800 }}>{badge}</span>}</div>{sub && (<div style={{ fontSize:12, color:"#8A8295", marginTop:1, display:"flex", alignItems:"center", gap:5 }}>{dot && <span style={{ width:7, height:7, borderRadius:"50%", background:dot, display:"inline-block" }} />}{sub}</div>)}</div><Logo size={15} /></div>);
+  return (<div className="glass" style={{ padding:"13px 16px", borderBottom:`1px solid ${LINE}`, display:"flex", alignItems:"center", gap:12, position:"sticky", top:0, zIndex:10 }}><button type="button" onClick={onBack} style={{ background:LINE, border:`1px solid ${LINE2}`, color:TXT, width:38, height:38, borderRadius:11, cursor:"pointer", fontSize:18, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>←</button><div style={{ flex:1 }}><div style={{ fontWeight:800, fontSize:15, display:"flex", alignItems:"center", gap:8, color:TXT }}>{title}{badge > 0 && <span style={{ background:R, color:"#fff", borderRadius:20, padding:"1px 9px", fontSize:11, fontWeight:800 }}>{badge}</span>}</div>{sub && (<div style={{ fontSize:12, color:MUT, marginTop:1, display:"flex", alignItems:"center", gap:5 }}>{dot && <span style={{ width:7, height:7, borderRadius:"50%", background:dot, display:"inline-block" }} />}{sub}</div>)}</div><Logo size={15} /></div>);
 }
 function Section({ children, dark }) {
   return (<section style={{ padding:"clamp(56px,8vw,84px) 5vw", background: dark ? BG1 : BG, borderTop:`1px solid ${LINE}` }}>{children}</section>);
