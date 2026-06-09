@@ -1,11 +1,54 @@
 import { useState, useRef, useEffect } from "react";
 import { supabase } from "./supabase";
 
-// ── Couleurs ──────────────────────────────────────────────────────────
-const R = "#FF6B35";
-const OR = "#F5A623";
-const V = "#22C55E";
+/* ═══════════════════════════════════════════════════════════════════════
+   ADBARTH — SYSTÈME DE DESIGN  ·  « Service du soir »
+   ───────────────────────────────────────────────────────────────────────
+   Concept : un bistro à la nuit tombée, vu côté tech. Des noirs CHAUDS
+   (teintés prune/braise) plutôt que le bleu-noir SaaS générique ; la
+   flamme orange y est à sa place, comme une bougie sur une table. Deux
+   accents seulement, jamais trois : la BRAISE (orange→ambre, l'appétit,
+   l'action) et la MENTHE (le « c'est prêt », la confiance, le frais).
+
+   COULEURS
+     flame   #FF6B35  signature, CTA, marque        (var R)
+     ember   #FFB23E  ambre chaud, prix, accents     (var OR)
+     mint    #2BD4A0  succès, « prêt », confiance     (var V)
+     ink     #0B0910  fond, braise éteinte
+     panel   #181320  surfaces, cartes
+     cream   #F2ECE4  texte principal (chaud, pas blanc clinique)
+   TYPO
+     display : Syne 700-900  — titres, géante, expressive, mémorable
+     texte   : DM Sans 400-700 — lecture, dense, neutre
+     mono    : Space Mono     — liens, refs, chiffres « machine »
+     échelle : 11·12·13·14·16·18·22·28·40·64 + hero clamp(34,8vw,86)
+   RYTHME   espacements 4·8·12·16·22·32·48·72   ·  rayons 8·12·16·22·28
+   PROFONDEUR  ombres douces + halo de braise (glow) sur les surfaces vives
+   MOUVEMENT  courbe maison EASE = cubic-bezier(.16,1,.3,1) ; reveals au
+              scroll, compteurs animés, micro-interactions ; tout neutralisé
+              sous prefers-reduced-motion.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+// ── Couleurs (R/OR/V conservés : référencés partout) ──────────────────
+const R = "#FF6B35";    // flame
+const RH = "#FF8A52";   // flame survol
+const OR = "#FFB23E";   // ember
+const V = "#2BD4A0";    // mint
+const BG = "#0B0910";   // ink
+const BG1 = "#100C16";  // section sombre
+const BG2 = "#130F1A";  // surface enfoncée / inputs
+const PANEL = "#181320";// cartes
+const LINE = "#241D2F"; // bordure douce
+const LINE2 = "#34293F";// bordure marquée
+const TXT = "#F2ECE4";  // cream
+const MUT = "#8A8295";  // texte secondaire
+const FAINT = "#6B6378";// texte ténu
+const EASE = "cubic-bezier(.16,1,.3,1)";
 const EMOJIS = ["🍔","🍕","🌮","🌯","🫓","🍗","🌭","🍟","🍝","🥗","🍣","🥙","🍜","🥘","🥩","🍖","🍮","🧁","🍰","🥤","🧃","☕","🍵","🍺","🥂","🍷"];
+
+// Respecte « moins d'animations » du système
+const RM = typeof window !== "undefined" && window.matchMedia
+  ? window.matchMedia("(prefers-reduced-motion: reduce)").matches : false;
 
 // ── Sécurité / anti-abus : limites et nettoyage des entrées ──
 const LIMITS = {
@@ -119,24 +162,104 @@ const now = () => new Date().toLocaleTimeString("fr-FR", { hour:"2-digit", minut
 
 // ── CSS global ────────────────────────────────────────────────────────
 const CSS = `
-@import url('https://fonts.googleapis.com/css2?family=Syne:wght@700;800;900&family=DM+Sans:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=DM+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap');
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html { scroll-behavior: smooth; }
-body { font-family: 'DM Sans', sans-serif; background: #09090F; color: #E8EAF0; overflow-x: hidden; -webkit-font-smoothing: antialiased; }
+body { font-family: 'DM Sans', sans-serif; background: ${BG}; color: ${TXT}; overflow-x: hidden; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+::selection { background: ${R}; color: #fff; }
+
+/* — keyframes — */
 @keyframes fadeUp { from { opacity:0; transform:translateY(16px) } to { opacity:1; transform:translateY(0) } }
 @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.2} }
 @keyframes spin { to { transform:rotate(360deg) } }
 @keyframes ring { 0%,100%{transform:rotate(0)} 20%{transform:rotate(-14deg)} 60%{transform:rotate(14deg)} }
 @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
-@keyframes glow { 0%,100%{box-shadow:0 0 20px #FF6B3535} 50%{box-shadow:0 0 55px #FF6B3570} }
-.fu { animation: fadeUp .38s ease both; }
-input:focus, textarea:focus, select:focus { outline: none; }
-button { font-family: 'DM Sans', sans-serif; }
-::-webkit-scrollbar { width: 4px; }
-::-webkit-scrollbar-thumb { background: #252836; border-radius: 4px; }
+@keyframes glow { 0%,100%{box-shadow:0 0 20px ${R}35} 50%{box-shadow:0 0 55px ${R}70} }
+@keyframes floaty { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-9px)} }
+@keyframes shimmer { to { background-position: 200% center } }
+@keyframes ripple { 0%{transform:scale(.6);opacity:.7} 100%{transform:scale(2.4);opacity:0} }
+@keyframes dropIn { 0%{opacity:0;transform:translateY(-26px) rotate(-3deg)} 60%{opacity:1} 100%{opacity:1;transform:translateY(0) rotate(0)} }
+@keyframes slideIn { from{opacity:0;transform:translateX(20px)} to{opacity:1;transform:translateX(0)} }
+@keyframes sheen { 0%{transform:translateX(-120%)} 60%,100%{transform:translateX(220%)} }
+@keyframes bob { 0%,100%{transform:translateY(0) rotate(0)} 50%{transform:translateY(-3px) rotate(2deg)} }
+
+/* — utilitaires — */
+.fu { animation: fadeUp .42s ${EASE} both; }
+.reveal { opacity:0; transform:translateY(26px); transition: opacity .7s ${EASE}, transform .7s ${EASE}; will-change: opacity, transform; }
+.reveal.in { opacity:1; transform:none; }
+.grad-text { background:linear-gradient(95deg, ${R}, ${OR}); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
+.lift { transition: transform .35s ${EASE}, border-color .35s ${EASE}, box-shadow .35s ${EASE}, background .35s ${EASE}; }
+.glass { background: rgba(24,19,32,.6); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
+.sheen { position:relative; overflow:hidden; }
+.sheen::after { content:''; position:absolute; top:0; left:0; width:60%; height:100%; background:linear-gradient(100deg, transparent, rgba(255,255,255,.13), transparent); transform:translateX(-120%); }
+.sheen:hover::after { animation: sheen .9s ${EASE}; }
+
+input, textarea, select { font-family:'DM Sans', sans-serif; transition: border-color .2s ease, box-shadow .2s ease, background .2s ease; }
+input:focus, textarea:focus, select:focus { outline: none; border-color:${R}99 !important; box-shadow:0 0 0 3px ${R}1F; }
+button { font-family: 'DM Sans', sans-serif; transition: transform .14s ${EASE}, filter .2s ease, background .2s ease, box-shadow .2s ease, border-color .2s ease; }
+button:active { transform: scale(.97); }
+a, button, [role=button] { -webkit-tap-highlight-color: transparent; }
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-thumb { background: ${LINE2}; border-radius: 6px; }
+::-webkit-scrollbar-thumb:hover { background: ${R}88; }
+
+/* — grain léger : profondeur sans image — */
+.grain::before { content:''; position:fixed; inset:0; z-index:1; pointer-events:none; opacity:.035; mix-blend-mode:overlay;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration:.001ms !important; animation-iteration-count:1 !important; transition-duration:.001ms !important; scroll-behavior:auto !important; }
+  .reveal { opacity:1 !important; transform:none !important; }
+}
 `;
 
-const I = { width: "100%", background: "#0E0F17", border: "1.5px solid #252836", borderRadius: 11, color: "#E8EAF0", fontSize: 14, padding: "12px 14px", fontFamily: "'DM Sans', sans-serif" };
+const I = { width: "100%", background: BG2, border: `1.5px solid ${LINE2}`, borderRadius: 12, color: TXT, fontSize: 14, padding: "13px 15px", fontFamily: "'DM Sans', sans-serif" };
+
+// ── Hooks d'animation ────────────────────────────────────────────────
+// Reveal au scroll via IntersectionObserver : renvoie une ref à poser sur l'élément .reveal
+function useReveal(opts = {}) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const el = ref.current; if (!el) return;
+    if (RM) { el.classList.add("in"); return; }
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach(e => { if (e.isIntersecting) { el.classList.add("in"); io.unobserve(el); } });
+    }, { threshold: opts.threshold ?? 0.18, rootMargin: opts.rootMargin ?? "0px 0px -8% 0px" });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+  return ref;
+}
+// Compteur animé : anime une valeur 0→n quand l'élément entre à l'écran
+function useCountUp(target, dur = 1400) {
+  const [val, setVal] = useState(RM ? target : 0);
+  const ref = useRef(null);
+  useEffect(() => {
+    const el = ref.current; if (!el || RM) return;
+    let raf, started = false;
+    const io = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting && !started) {
+        started = true; const t0 = performance.now();
+        const tick = (t) => {
+          const p = Math.min(1, (t - t0) / dur);
+          const eased = 1 - Math.pow(1 - p, 3);
+          setVal(target * eased);
+          if (p < 1) raf = requestAnimationFrame(tick); else setVal(target);
+        };
+        raf = requestAnimationFrame(tick); io.unobserve(el);
+      }
+    }, { threshold: 0.4 });
+    io.observe(el);
+    return () => { io.disconnect(); cancelAnimationFrame(raf); };
+  }, [target]);
+  return [val, ref];
+}
+// Enveloppe un bloc dans une révélation au scroll (avec délai optionnel)
+function Reveal({ children, delay = 0, style = {}, as: Tag = "div", ...rest }) {
+  const ref = useReveal();
+  return <Tag ref={ref} className="reveal" style={{ transitionDelay: `${delay}ms`, ...style }} {...rest}>{children}</Tag>;
+}
 
 // ═════════════════════════════════════════════════════════════════════
 // ROOT
@@ -190,10 +313,10 @@ export default function AdBarth() {
   const logout = async () => { await supabase.auth.signOut(); setUser(null); setUserId(null); setPage("login"); };
   const go = p => { setPage(p); window.scrollTo(0, 0); };
   const locked = !!(user && user.aboFin && new Date(user.aboFin).getTime() < Date.now());
-  if (!ready) return <><style>{CSS}</style><div style={{ minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", background:"#09090F" }}><Spinner /></div></>;
+  if (!ready) return <><style>{CSS}</style><div style={{ minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", background:"#0B0910" }}><Spinner /></div></>;
   return (
     <><style>{CSS}</style>
-    <div style={{ minHeight:"100vh", background:"#09090F", color:"#E8EAF0", fontFamily:"'DM Sans',sans-serif" }}>
+    <div style={{ minHeight:"100vh", background:"#0B0910", color:"#F2ECE4", fontFamily:"'DM Sans',sans-serif" }}>
       {page === "login" && <Login go={go} onLogged={applySession} />}
       {page === "reset" && <Reset go={go} onLogged={applySession} />}
       {page === "landing" && <Landing go={go} />}
@@ -237,32 +360,32 @@ function Login({ go, onLogged }) {
   return (
     <div style={{ minHeight:"100vh", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:24 }}>
       <div style={{ marginBottom:30 }}><Logo size={28} /></div>
-      <div style={{ width:"100%", maxWidth:380, background:"#111420", border:"1px solid #181824", borderRadius:20, padding:28 }}>
+      <div style={{ width:"100%", maxWidth:380, background:"#181320", border:"1px solid #241D2F", borderRadius:20, padding:28 }}>
         {mode === "login" ? <>
           <h2 style={{ fontFamily:"'Syne',sans-serif", fontSize:24, fontWeight:900, marginBottom:6, color:"#fff" }}>Connexion</h2>
-          <p style={{ fontSize:13, color:"#6B7280", marginBottom:24 }}>Accédez à votre espace restaurateur.</p>
+          <p style={{ fontSize:13, color:"#8A8295", marginBottom:24 }}>Accédez à votre espace restaurateur.</p>
           <form onSubmit={submit} style={{ display:"flex", flexDirection:"column", gap:14 }}>
             <Field l="Email"><input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="vous@restaurant.fr" style={I} /></Field>
             <Field l="Mot de passe"><input type="password" value={pass} onChange={e => setPass(e.target.value)} placeholder="••••••••" style={I} /></Field>
             {err && <div style={{ color:"#EF4444", fontSize:13, textAlign:"center" }}>{err}</div>}
-            <button type="submit" disabled={loading} style={{ padding:"15px", borderRadius:12, background: loading ? "#252836" : R, color:"#fff", border:"none", fontWeight:800, fontSize:15, cursor: loading ? "not-allowed" : "pointer", marginTop:4, display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}>
+            <button type="submit" disabled={loading} style={{ padding:"15px", borderRadius:12, background: loading ? "#34293F" : R, color:"#fff", border:"none", fontWeight:800, fontSize:15, cursor: loading ? "not-allowed" : "pointer", marginTop:4, display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}>
               {loading ? <><Spinner /> Connexion…</> : "Se connecter →"}
             </button>
           </form>
-          <p style={{ textAlign:"center", marginTop:14 }}><span onClick={() => { setMode("forgot"); setErr(""); setMsg(""); }} style={{ fontSize:13, color:"#9CA3AF", cursor:"pointer" }}>Mot de passe oublié ?</span></p>
-          <div style={{ borderTop:"1px solid #181824", marginTop:18, paddingTop:18, textAlign:"center" }}>
-            <p style={{ fontSize:13, color:"#6B7280" }}>Pas encore de compte ?</p>
+          <p style={{ textAlign:"center", marginTop:14 }}><span onClick={() => { setMode("forgot"); setErr(""); setMsg(""); }} style={{ fontSize:13, color:"#A89FB0", cursor:"pointer" }}>Mot de passe oublié ?</span></p>
+          <div style={{ borderTop:"1px solid #241D2F", marginTop:18, paddingTop:18, textAlign:"center" }}>
+            <p style={{ fontSize:13, color:"#8A8295" }}>Pas encore de compte ?</p>
             <span onClick={() => go("pricing")} style={{ fontSize:13, color:R, fontWeight:700, cursor:"pointer" }}>Créer un compte →</span>
-            <span onClick={() => go("landing")} style={{ display:"block", marginTop:8, fontSize:12, color:"#555B6E", cursor:"pointer" }}>Découvrir AdBarth</span>
+            <span onClick={() => go("landing")} style={{ display:"block", marginTop:8, fontSize:12, color:"#6B6378", cursor:"pointer" }}>Découvrir AdBarth</span>
           </div>
         </> : <>
           <h2 style={{ fontFamily:"'Syne',sans-serif", fontSize:24, fontWeight:900, marginBottom:6, color:"#fff" }}>Mot de passe oublié</h2>
-          <p style={{ fontSize:13, color:"#6B7280", marginBottom:24 }}>Entrez votre email, nous vous enverrons un lien pour le réinitialiser.</p>
+          <p style={{ fontSize:13, color:"#8A8295", marginBottom:24 }}>Entrez votre email, nous vous enverrons un lien pour le réinitialiser.</p>
           <form onSubmit={sendReset} style={{ display:"flex", flexDirection:"column", gap:14 }}>
             <Field l="Email"><input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="vous@restaurant.fr" style={I} /></Field>
             {err && <div style={{ color:"#EF4444", fontSize:13, textAlign:"center" }}>{err}</div>}
             {msg && <div style={{ color:V, fontSize:13, textAlign:"center", lineHeight:1.6 }}>{msg}</div>}
-            <button type="submit" disabled={loading} style={{ padding:"15px", borderRadius:12, background: loading ? "#252836" : R, color:"#fff", border:"none", fontWeight:800, fontSize:15, cursor: loading ? "not-allowed" : "pointer", marginTop:4, display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}>
+            <button type="submit" disabled={loading} style={{ padding:"15px", borderRadius:12, background: loading ? "#34293F" : R, color:"#fff", border:"none", fontWeight:800, fontSize:15, cursor: loading ? "not-allowed" : "pointer", marginTop:4, display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}>
               {loading ? <><Spinner /> Envoi…</> : "Envoyer le lien →"}
             </button>
           </form>
@@ -297,19 +420,19 @@ function Reset({ go, onLogged }) {
   return (
     <div style={{ minHeight:"100vh", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:24 }}>
       <div style={{ marginBottom:30 }}><Logo size={28} /></div>
-      <div style={{ width:"100%", maxWidth:380, background:"#111420", border:"1px solid #181824", borderRadius:20, padding:28 }}>
+      <div style={{ width:"100%", maxWidth:380, background:"#181320", border:"1px solid #241D2F", borderRadius:20, padding:28 }}>
         <h2 style={{ fontFamily:"'Syne',sans-serif", fontSize:24, fontWeight:900, marginBottom:6, color:"#fff" }}>Nouveau mot de passe</h2>
-        <p style={{ fontSize:13, color:"#6B7280", marginBottom:24 }}>Choisissez un nouveau mot de passe pour votre compte.</p>
+        <p style={{ fontSize:13, color:"#8A8295", marginBottom:24 }}>Choisissez un nouveau mot de passe pour votre compte.</p>
         <form onSubmit={submit} style={{ display:"flex", flexDirection:"column", gap:14 }}>
           <Field l="Nouveau mot de passe"><input type="password" value={pass} onChange={e => setPass(e.target.value)} placeholder="•••••••• (6 min)" style={I} /></Field>
           <Field l="Confirmer le mot de passe"><input type="password" value={pass2} onChange={e => setPass2(e.target.value)} placeholder="••••••••" style={I} /></Field>
           {err && <div style={{ color:"#EF4444", fontSize:13, textAlign:"center" }}>{err}</div>}
           {okMsg && <div style={{ color:V, fontSize:13, textAlign:"center", fontWeight:700 }}>{okMsg}</div>}
-          <button type="submit" disabled={loading || !!okMsg} style={{ padding:"15px", borderRadius:12, background: (loading || okMsg) ? "#252836" : R, color:"#fff", border:"none", fontWeight:800, fontSize:15, cursor: (loading || okMsg) ? "not-allowed" : "pointer", marginTop:4, display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}>
+          <button type="submit" disabled={loading || !!okMsg} style={{ padding:"15px", borderRadius:12, background: (loading || okMsg) ? "#34293F" : R, color:"#fff", border:"none", fontWeight:800, fontSize:15, cursor: (loading || okMsg) ? "not-allowed" : "pointer", marginTop:4, display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}>
             {loading ? <><Spinner /> Mise à jour…</> : okMsg ? "Redirection…" : "Mettre à jour →"}
           </button>
         </form>
-        <p style={{ textAlign:"center", marginTop:16 }}><span onClick={() => go("login")} style={{ fontSize:13, color:"#9CA3AF", cursor:"pointer" }}>← Annuler</span></p>
+        <p style={{ textAlign:"center", marginTop:16 }}><span onClick={() => go("login")} style={{ fontSize:13, color:"#A89FB0", cursor:"pointer" }}>← Annuler</span></p>
       </div>
     </div>
   );
@@ -321,7 +444,7 @@ function Reset({ go, onLogged }) {
 function Landing({ go }) {
   return (
     <div>
-      <nav style={{ position:"sticky", top:0, zIndex:100, height:62, display:"flex", alignItems:"center", justifyContent:"space-between", padding:"0 5vw", background:"rgba(9,9,15,.94)", backdropFilter:"blur(20px)", borderBottom:"1px solid #181824" }}>
+      <nav style={{ position:"sticky", top:0, zIndex:100, height:62, display:"flex", alignItems:"center", justifyContent:"space-between", padding:"0 5vw", background:"rgba(9,9,15,.94)", backdropFilter:"blur(20px)", borderBottom:"1px solid #241D2F" }}>
         <Logo />
         <div style={{ display:"flex", gap:10 }}>
           <GhostBtn sm onClick={() => go("login")}>Se connecter</GhostBtn>
@@ -330,7 +453,7 @@ function Landing({ go }) {
       </nav>
       <section style={{ minHeight:"92vh", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"90px 20px 70px", textAlign:"center", position:"relative", overflow:"hidden" }}>
         <div style={{ position:"absolute", inset:0, background:`radial-gradient(ellipse 80% 55% at 50% -5%, ${R}1C 0%, transparent 65%)`, pointerEvents:"none" }} />
-        <div style={{ position:"absolute", inset:0, opacity:.12, backgroundImage:`linear-gradient(#1E2030 1px,transparent 1px),linear-gradient(90deg,#1E2030 1px,transparent 1px)`, backgroundSize:"54px 54px", maskImage:"radial-gradient(ellipse 72% 62% at 50% 50%,black,transparent)" }} />
+        <div style={{ position:"absolute", inset:0, opacity:.12, backgroundImage:`linear-gradient(#2A2238 1px,transparent 1px),linear-gradient(90deg,#2A2238 1px,transparent 1px)`, backgroundSize:"54px 54px", maskImage:"radial-gradient(ellipse 72% 62% at 50% 50%,black,transparent)" }} />
         <div className="fu" style={{ display:"inline-flex", alignItems:"center", gap:8, background:`${R}18`, border:`1px solid ${R}45`, borderRadius:100, padding:"6px 18px", fontSize:11, fontWeight:700, color:R, letterSpacing:"1.3px", textTransform:"uppercase", marginBottom:28 }}>
           <span style={{ width:7, height:7, borderRadius:"50%", background:R, animation:"blink 1.4s infinite" }} />
           Nouveau · Spécial Restaurants
@@ -339,17 +462,17 @@ function Landing({ go }) {
           Pendant que vous cuisinez,<br />
           <span style={{ color:R }}>vos clients partent ailleurs.</span>
         </h1>
-        <p className="fu" style={{ fontSize:"clamp(14px,1.8vw,18px)", color:"#6B7280", maxWidth:500, lineHeight:1.75, marginBottom:40, animationDelay:".2s" }}>
+        <p className="fu" style={{ fontSize:"clamp(14px,1.8vw,18px)", color:"#8A8295", maxWidth:500, lineHeight:1.75, marginBottom:40, animationDelay:".2s" }}>
           AdBarth envoie un SMS automatique à chaque appel manqué. Le client clique sur le lien, commande ou réserve — et la commande arrive directement en cuisine.
         </p>
         <div className="fu" style={{ display:"flex", gap:12, flexWrap:"wrap", justifyContent:"center", marginBottom:20, animationDelay:".3s" }}>
           <PrimaryBtn lg onClick={() => go("pricing")}>Récupérer mes appels manqués →</PrimaryBtn>
           <GhostBtn lg onClick={() => go("simulator")}>📞 Voir la démo</GhostBtn>
         </div>
-        <p className="fu" style={{ fontSize:13, color:"#555B6E", animationDelay:".4s" }}>
-          <strong style={{ color:"#E8EAF0" }}>À partir de 29,90€/mois</strong> · Sans engagement · Installation en 15 min
+        <p className="fu" style={{ fontSize:13, color:"#6B6378", animationDelay:".4s" }}>
+          <strong style={{ color:"#F2ECE4" }}>À partir de 29,90€/mois</strong> · Sans engagement · Installation en 15 min
         </p>
-        <p className="fu" style={{ fontSize:13, color:"#9CA3AF", animationDelay:".45s", marginTop:14 }}>
+        <p className="fu" style={{ fontSize:13, color:"#A89FB0", animationDelay:".45s", marginTop:14 }}>
           Déjà un compte ? <span onClick={() => go("login")} style={{ color:R, fontWeight:700, cursor:"pointer" }}>Se connecter →</span>
         </p>
         <div className="fu" style={{ display:"flex", alignItems:"center", flexWrap:"wrap", justifyContent:"center", marginTop:60, animationDelay:".5s" }}>
@@ -360,25 +483,25 @@ function Landing({ go }) {
             { i:"🍽️", l:"Arrive en cuisine" },
           ].map((s, idx) => (
             <div key={idx} style={{ display:"flex", alignItems:"center" }}>
-              <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:8, padding:"14px 20px", background: idx % 2 === 1 ? `${R}12` : "#111420", border:`1px solid ${idx % 2 === 1 ? R+"45" : "#181824"}`, borderRadius:14, minWidth:90 }}>
+              <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:8, padding:"14px 20px", background: idx % 2 === 1 ? `${R}12` : "#181320", border:`1px solid ${idx % 2 === 1 ? R+"45" : "#241D2F"}`, borderRadius:14, minWidth:90 }}>
                 <span style={{ fontSize:24 }}>{s.i}</span>
-                <span style={{ fontSize:10, fontWeight:700, color: idx % 2 === 1 ? R : "#6B7280", textAlign:"center", lineHeight:1.3 }}>{s.l}</span>
+                <span style={{ fontSize:10, fontWeight:700, color: idx % 2 === 1 ? R : "#8A8295", textAlign:"center", lineHeight:1.3 }}>{s.l}</span>
               </div>
               {idx < 3 && <span style={{ color:R, fontSize:16, padding:"0 5px", opacity:.65 }}>→</span>}
             </div>
           ))}
         </div>
       </section>
-      <div style={{ display:"flex", flexWrap:"wrap", borderTop:"1px solid #181824", borderBottom:"1px solid #181824" }}>
+      <div style={{ display:"flex", flexWrap:"wrap", borderTop:"1px solid #241D2F", borderBottom:"1px solid #241D2F" }}>
         {[
           { n:"85%", l:"des clients ne rappellent jamais" },
           { n:"3s", l:"délai d'envoi du SMS" },
           { n:"+34%",l:"de commandes récupérées" },
           { n:"0%", l:"de commission sur vos ventes" },
         ].map((s, i) => (
-          <div key={i} style={{ flex:1, minWidth:130, padding:"22px 14px", textAlign:"center", borderRight: i < 3 ? "1px solid #181824" : "none" }}>
+          <div key={i} style={{ flex:1, minWidth:130, padding:"22px 14px", textAlign:"center", borderRight: i < 3 ? "1px solid #241D2F" : "none" }}>
             <div style={{ fontFamily:"'Syne',sans-serif", fontSize:28, fontWeight:900, color:R, lineHeight:1, marginBottom:6 }}>{s.n}</div>
-            <div style={{ fontSize:12, color:"#6B7280", fontWeight:600, lineHeight:1.4 }}>{s.l}</div>
+            <div style={{ fontSize:12, color:"#8A8295", fontWeight:600, lineHeight:1.4 }}>{s.l}</div>
           </div>
         ))}
       </div>
@@ -394,8 +517,8 @@ function Landing({ go }) {
             <HoverCard key={s.n}>
               <div style={{ fontFamily:"'Syne',sans-serif", fontSize:36, fontWeight:900, color:`${R}1C`, marginBottom:10, lineHeight:1 }}>{s.n}</div>
               <div style={{ fontSize:26, marginBottom:10 }}>{s.i}</div>
-              <div style={{ fontSize:14, fontWeight:700, marginBottom:8, color:"#E8EAF0" }}>{s.t}</div>
-              <div style={{ fontSize:13, color:"#6B7280", lineHeight:1.65 }}>{s.d}</div>
+              <div style={{ fontSize:14, fontWeight:700, marginBottom:8, color:"#F2ECE4" }}>{s.t}</div>
+              <div style={{ fontSize:13, color:"#8A8295", lineHeight:1.65 }}>{s.d}</div>
             </HoverCard>
           ))}
         </div>
@@ -413,19 +536,19 @@ function Landing({ go }) {
           ].map(w => (
             <HoverCard key={w.t} subtle>
               <div style={{ width:44, height:44, background:`${R}18`, borderRadius:12, display:"flex", alignItems:"center", justifyContent:"center", fontSize:20, marginBottom:14 }}>{w.i}</div>
-              <div style={{ fontSize:14, fontWeight:700, marginBottom:7, color:"#E8EAF0" }}>{w.t}</div>
-              <div style={{ fontSize:13, color:"#6B7280", lineHeight:1.6 }}>{w.d}</div>
+              <div style={{ fontSize:14, fontWeight:700, marginBottom:7, color:"#F2ECE4" }}>{w.t}</div>
+              <div style={{ fontSize:13, color:"#8A8295", lineHeight:1.6 }}>{w.d}</div>
             </HoverCard>
           ))}
         </div>
       </Section>
       <Section dark>
         <SectionHead pill="Comparaison" title={"AdBarth vs plateformes\nde livraison"} />
-        <div style={{ maxWidth:580, margin:"0 auto", background:"#111420", border:"1px solid #181824", borderRadius:20, overflow:"hidden" }}>
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", padding:"10px 18px", background:"#0E0F17", borderBottom:"1px solid #181824" }}>
-            <div style={{ fontSize:11, color:"#555B6E", fontWeight:700, textTransform:"uppercase", letterSpacing:1 }}>Critère</div>
+        <div style={{ maxWidth:580, margin:"0 auto", background:"#181320", border:"1px solid #241D2F", borderRadius:20, overflow:"hidden" }}>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", padding:"10px 18px", background:"#130F1A", borderBottom:"1px solid #241D2F" }}>
+            <div style={{ fontSize:11, color:"#6B6378", fontWeight:700, textTransform:"uppercase", letterSpacing:1 }}>Critère</div>
             <div style={{ fontSize:11, color:R, fontWeight:800, textAlign:"center", textTransform:"uppercase", letterSpacing:1 }}>AdBarth</div>
-            <div style={{ fontSize:11, color:"#555B6E", fontWeight:700, textAlign:"center", textTransform:"uppercase", letterSpacing:1 }}>Uber Eats</div>
+            <div style={{ fontSize:11, color:"#6B6378", fontWeight:700, textAlign:"center", textTransform:"uppercase", letterSpacing:1 }}>Uber Eats</div>
           </div>
           {[
             { l:"Commission par commande", a:"0%", b:"25–30%" },
@@ -435,8 +558,8 @@ function Landing({ go }) {
             { l:"Vos clients restent vôtres", a:"✓",b:"✗" },
             { l:"Coût mensuel", a:"Fixe dès 29,90€", b:"Variable + %" },
           ].map((row, i) => (
-            <div key={row.l} style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", padding:"13px 18px", borderBottom: i < 5 ? "1px solid #181824" : "none", background: i % 2 === 1 ? "#0E0F17" : "transparent" }}>
-              <div style={{ fontSize:13, color:"#9CA3AF" }}>{row.l}</div>
+            <div key={row.l} style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", padding:"13px 18px", borderBottom: i < 5 ? "1px solid #241D2F" : "none", background: i % 2 === 1 ? "#130F1A" : "transparent" }}>
+              <div style={{ fontSize:13, color:"#A89FB0" }}>{row.l}</div>
               <div style={{ fontSize:13, fontWeight:800, color:V, textAlign:"center" }}>{row.a}</div>
               <div style={{ fontSize:13, fontWeight:600, color:"#EF4444", textAlign:"center" }}>{row.b}</div>
             </div>
@@ -451,32 +574,32 @@ function Landing({ go }) {
             { t:"J'étais sur Uber Eats, je payais une fortune en commission. AdBarth m'a coûté 49€ le premier mois et j'ai récupéré mes clients directement. Rentable dès la première semaine.", n:"Sarah M.", r:"Fast-food · Paris" },
             { t:"Le dashboard cuisine a changé notre organisation. Les commandes en ligne arrivent au même endroit, mon équipe ne rate plus rien.", n:"Naïm B.", r:"Fast-food · Marseille" },
           ].map(t => (
-            <div key={t.n} style={{ background:"#111420", border:"1px solid #181824", borderRadius:18, padding:24 }}>
+            <div key={t.n} style={{ background:"#181320", border:"1px solid #241D2F", borderRadius:18, padding:24 }}>
               <div style={{ color:OR, fontSize:14, letterSpacing:3, marginBottom:14 }}>★★★★★</div>
-              <div style={{ fontSize:14, color:"#C8CAD4", lineHeight:1.7, marginBottom:16, fontStyle:"italic" }}>« {t.t} »</div>
+              <div style={{ fontSize:14, color:"#D2C9D6", lineHeight:1.7, marginBottom:16, fontStyle:"italic" }}>« {t.t} »</div>
               <div style={{ display:"flex", alignItems:"center", gap:10 }}>
                 <div style={{ width:36, height:36, borderRadius:"50%", background:`linear-gradient(135deg,${R},${OR})`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:800, color:"#fff", flexShrink:0 }}>{t.n[0]}</div>
                 <div>
                   <div style={{ fontSize:13, fontWeight:700 }}>{t.n}</div>
-                  <div style={{ fontSize:11, color:"#6B7280" }}>{t.r}</div>
+                  <div style={{ fontSize:11, color:"#8A8295" }}>{t.r}</div>
                 </div>
               </div>
             </div>
           ))}
         </div>
       </Section>
-      <section style={{ padding:"90px 5vw", textAlign:"center", background:`linear-gradient(180deg, #09090F 0%, ${R}0A 50%, #09090F 100%)` }}>
+      <section style={{ padding:"90px 5vw", textAlign:"center", background:`linear-gradient(180deg, #0B0910 0%, ${R}0A 50%, #0B0910 100%)` }}>
         <h2 style={{ fontFamily:"'Syne',sans-serif", fontSize:"clamp(26px,4.5vw,54px)", fontWeight:900, letterSpacing:"-1.5px", marginBottom:16, maxWidth:680, margin:"0 auto 16px" }}>
           Prêt à ne plus rater aucun client ?
         </h2>
-        <p style={{ color:"#6B7280", fontSize:16, marginBottom:36 }}>Installation en 15 minutes. Sans engagement.</p>
+        <p style={{ color:"#8A8295", fontSize:16, marginBottom:36 }}>Installation en 15 minutes. Sans engagement.</p>
         <PrimaryBtn lg onClick={() => go("pricing")}>Démarrer maintenant →</PrimaryBtn>
       </section>
-      <footer style={{ borderTop:"1px solid #181824", padding:"26px 5vw", display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:14 }}>
+      <footer style={{ borderTop:"1px solid #241D2F", padding:"26px 5vw", display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:14 }}>
         <Logo />
-        <div style={{ fontSize:13, color:"#555B6E" }}>© 2025 AdBarth · Tous droits réservés</div>
+        <div style={{ fontSize:13, color:"#6B6378" }}>© 2025 AdBarth · Tous droits réservés</div>
         <div style={{ display:"flex", gap:20, flexWrap:"wrap" }}>
-          {[{ l:"Mentions légales", p:"mentions" }, { l:"CGV", p:"cgv" }, { l:"Confidentialité", p:"confidentialite" }].map(x => (<span key={x.p} onClick={() => go(x.p)} style={{ fontSize:13, color:"#555B6E", cursor:"pointer" }}>{x.l}</span>))}
+          {[{ l:"Mentions légales", p:"mentions" }, { l:"CGV", p:"cgv" }, { l:"Confidentialité", p:"confidentialite" }].map(x => (<span key={x.p} onClick={() => go(x.p)} style={{ fontSize:13, color:"#6B6378", cursor:"pointer" }}>{x.l}</span>))}
         </div>
       </footer>
     </div>
@@ -493,26 +616,26 @@ function Pricing({ go, onPick }) {
       <div style={{ padding:"40px 20px", maxWidth:960, margin:"0 auto" }}>
         <div style={{ textAlign:"center", marginBottom:48 }}>
           <h2 style={{ fontFamily:"'Syne',sans-serif", fontSize:"clamp(22px,3.5vw,40px)", fontWeight:900, letterSpacing:"-1px", marginBottom:12 }}>Simple. Transparent. Sans surprise.</h2>
-          <p style={{ color:"#6B7280", fontSize:15 }}>Pas de commission sur vos commandes. Pas de frais cachés. Juste un forfait fixe.</p>
+          <p style={{ color:"#8A8295", fontSize:15 }}>Pas de commission sur vos commandes. Pas de frais cachés. Juste un forfait fixe.</p>
         </div>
         <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(255px,1fr))", gap:20 }}>
           {PLANS.map(p => (
-            <div key={p.key} style={{ background:"#111420", border:`1.5px solid ${p.popular ? R : "#181824"}`, borderRadius:22, padding:28, position:"relative", boxShadow: p.popular ? `0 0 55px ${R}1C` : "none" }}>
+            <div key={p.key} style={{ background:"#181320", border:`1.5px solid ${p.popular ? R : "#241D2F"}`, borderRadius:22, padding:28, position:"relative", boxShadow: p.popular ? `0 0 55px ${R}1C` : "none" }}>
               {p.popular && (<div style={{ position:"absolute", top:-13, left:"50%", transform:"translateX(-50%)", background:R, color:"#fff", padding:"4px 18px", borderRadius:100, fontSize:11, fontWeight:800, whiteSpace:"nowrap" }}>⭐ Le plus choisi</div>)}
-              <div style={{ fontSize:12, fontWeight:700, color:"#6B7280", textTransform:"uppercase", letterSpacing:1, marginBottom:10 }}>{p.name}</div>
+              <div style={{ fontSize:12, fontWeight:700, color:"#8A8295", textTransform:"uppercase", letterSpacing:1, marginBottom:10 }}>{p.name}</div>
               <div style={{ fontFamily:"'Syne',sans-serif", fontSize:46, fontWeight:900, color:"#fff", lineHeight:1, marginBottom:4 }}>
                 <sup style={{ fontSize:20, verticalAlign:"top", marginTop:8, display:"inline-block" }}>€</sup>{p.price.toFixed(2).replace(".", ",")}
               </div>
-              <div style={{ fontSize:13, color:"#6B7280", marginBottom:24 }}>par mois · sans engagement</div>
+              <div style={{ fontSize:13, color:"#8A8295", marginBottom:24 }}>par mois · sans engagement</div>
               <ul style={{ listStyle:"none", display:"flex", flexDirection:"column", gap:10, marginBottom:26 }}>
-                {p.features.map(f => (<li key={f} style={{ fontSize:13, color:"#E8EAF0", display:"flex", gap:9, alignItems:"flex-start" }}><span style={{ color:V, fontWeight:800, flexShrink:0 }}>✓</span>{f}</li>))}
-                {p.missing.map(f => (<li key={f} style={{ fontSize:13, color:"#555B6E", display:"flex", gap:9, alignItems:"flex-start" }}><span style={{ flexShrink:0 }}>—</span>{f}</li>))}
+                {p.features.map(f => (<li key={f} style={{ fontSize:13, color:"#F2ECE4", display:"flex", gap:9, alignItems:"flex-start" }}><span style={{ color:V, fontWeight:800, flexShrink:0 }}>✓</span>{f}</li>))}
+                {p.missing.map(f => (<li key={f} style={{ fontSize:13, color:"#6B6378", display:"flex", gap:9, alignItems:"flex-start" }}><span style={{ flexShrink:0 }}>—</span>{f}</li>))}
               </ul>
-              <button onClick={() => onPick(p)} style={{ width:"100%", padding:"14px", borderRadius:12, background: p.popular ? R : "transparent", color: p.popular ? "#fff" : "#E8EAF0", border: p.popular ? "none" : "1.5px solid #252836", fontFamily:"inherit", fontSize:14, fontWeight:800, cursor:"pointer" }}>Choisir ce plan →</button>
+              <button onClick={() => onPick(p)} style={{ width:"100%", padding:"14px", borderRadius:12, background: p.popular ? R : "transparent", color: p.popular ? "#fff" : "#F2ECE4", border: p.popular ? "none" : "1.5px solid #34293F", fontFamily:"inherit", fontSize:14, fontWeight:800, cursor:"pointer" }}>Choisir ce plan →</button>
             </div>
           ))}
         </div>
-        <p style={{ textAlign:"center", fontSize:13, color:"#9CA3AF", marginTop:30 }}>
+        <p style={{ textAlign:"center", fontSize:13, color:"#A89FB0", marginTop:30 }}>
           Déjà un compte ? <span onClick={() => go("login")} style={{ color:R, fontWeight:700, cursor:"pointer" }}>Se connecter →</span>
         </p>
       </div>
@@ -556,12 +679,12 @@ function Signup({ go, plan, onLogged }) {
     <div style={{ minHeight:"100vh", paddingBottom:60 }}>
       <StepNav title="Créer votre compte" onBack={() => go("pricing")} step={2} of={2} />
       <div style={{ padding:"32px 20px", maxWidth:450, margin:"0 auto" }}>
-        <div style={{ background:"#111420", border:"1px solid #181824", borderRadius:14, padding:"14px 18px", marginBottom:20, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+        <div style={{ background:"#181320", border:"1px solid #241D2F", borderRadius:14, padding:"14px 18px", marginBottom:20, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
           <div>
-            <div style={{ fontSize:12, color:"#6B7280", fontWeight:700 }}>Plan sélectionné</div>
+            <div style={{ fontSize:12, color:"#8A8295", fontWeight:700 }}>Plan sélectionné</div>
             <div style={{ fontFamily:"'Syne',sans-serif", fontSize:20, fontWeight:900, color:R, marginTop:2 }}>{chosenPlan.name}</div>
           </div>
-          <div style={{ fontFamily:"'Syne',sans-serif", fontSize:24, fontWeight:900 }}>{chosenPlan.price.toFixed(2).replace(".", ",")}€<span style={{ fontSize:12, color:"#6B7280", fontWeight:600 }}>/mois</span></div>
+          <div style={{ fontFamily:"'Syne',sans-serif", fontSize:24, fontWeight:900 }}>{chosenPlan.price.toFixed(2).replace(".", ",")}€<span style={{ fontSize:12, color:"#8A8295", fontWeight:600 }}>/mois</span></div>
         </div>
         <form onSubmit={submit} style={{ display:"flex", flexDirection:"column", gap:13 }}>
           <Field l="Prénom & Nom *"><input value={f.name} onChange={e => setF(v => ({ ...v, name:e.target.value }))} placeholder="Jean Dupont" style={I} /></Field>
@@ -571,7 +694,7 @@ function Signup({ go, plan, onLogged }) {
           <Field l="Mot de passe *"><input type="password" value={f.pass} onChange={e => setF(v => ({ ...v, pass:e.target.value }))} placeholder="•••••••• (6 min)" style={I} /></Field>
           <Field l="Confirmer le mot de passe *"><input type="password" value={f.pass2} onChange={e => setF(v => ({ ...v, pass2:e.target.value }))} placeholder="••••••••" style={I} /></Field>
           {err && <div style={{ color: err.startsWith("Compte créé") ? V : "#EF4444", fontSize:13, textAlign:"center", padding:"6px 0" }}>{err}</div>}
-          <button type="submit" disabled={loading} style={{ padding:"15px", borderRadius:12, background: loading ? "#252836" : R, color:"#fff", border:"none", fontWeight:800, fontSize:15, cursor: loading ? "not-allowed" : "pointer", marginTop:4, display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}>
+          <button type="submit" disabled={loading} style={{ padding:"15px", borderRadius:12, background: loading ? "#34293F" : R, color:"#fff", border:"none", fontWeight:800, fontSize:15, cursor: loading ? "not-allowed" : "pointer", marginTop:4, display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}>
             {loading ? <><Spinner /> Création…</> : "Créer mon compte →"}
           </button>
           <p style={{ textAlign:"center", fontSize:12 }}><span onClick={() => go("login")} style={{ color:R, fontWeight:700, cursor:"pointer" }}>Déjà un compte ? Se connecter</span></p>
@@ -654,20 +777,20 @@ function Admin({ user, go, onLogout, orders = [] }) {
   return (
     <div style={{ minHeight:"100vh", display:"flex", flexDirection:"column", maxWidth:"100%", margin:"0 auto" }}>
       {toast && (<div className="fu" style={{ position:"fixed", bottom:28, left:"50%", transform:"translateX(-50%)", background:V, color:"#fff", padding:"10px 24px", borderRadius:22, fontSize:13, fontWeight:700, zIndex:300, maxWidth:"90%", textAlign:"center" }}>{toast}</div>)}
-      <div style={{ background:"#111420", borderBottom:"1px solid #181824", padding:"12px 16px", display:"flex", alignItems:"center", justifyContent:"space-between", position:"sticky", top:0, zIndex:20 }}>
+      <div style={{ background:"#181320", borderBottom:"1px solid #241D2F", padding:"12px 16px", display:"flex", alignItems:"center", justifyContent:"space-between", position:"sticky", top:0, zIndex:20 }}>
         <div>
           <div style={{ display:"flex", alignItems:"center", gap:8 }}>
             <Logo size={16} />
-            <span style={{ fontSize:10, fontWeight:700, color:"#6B7280", background:"#181824", border:"1px solid #252836", borderRadius:20, padding:"2px 10px", letterSpacing:.5 }}>ADMIN</span>
+            <span style={{ fontSize:10, fontWeight:700, color:"#8A8295", background:"#241D2F", border:"1px solid #34293F", borderRadius:20, padding:"2px 10px", letterSpacing:.5 }}>ADMIN</span>
             <span style={{ fontSize:10, fontWeight:800, color:R, background:`${R}18`, border:`1px solid ${R}45`, borderRadius:20, padding:"2px 10px" }}>{planName}</span>
           </div>
-          <div style={{ fontSize:11, color:"#6B7280", marginTop:2 }}>{cfg.name || user?.resto}</div>
+          <div style={{ fontSize:11, color:"#8A8295", marginTop:2 }}>{cfg.name || user?.resto}</div>
         </div>
         <div style={{ display:"flex", gap:7, alignItems:"center", flexWrap:"wrap" }}>
           <AdminBtn color={R} onClick={() => go("simulator")}>📞 Test</AdminBtn>
           <AdminBtn color={V} onClick={() => go("chatbot")}>💬 Chatbot</AdminBtn>
           <AdminBtn color="#3B82F6" onClick={() => go("dashboard")}>🍽️ Cuisine</AdminBtn>
-          <AdminBtn color="#9CA3AF" onClick={onLogout}>⏻ Déco</AdminBtn>
+          <AdminBtn color="#A89FB0" onClick={onLogout}>⏻ Déco</AdminBtn>
           <ToggleSwitch value={cfg.active} onChange={v => setCfg(c => ({ ...c, active:v }))} accent={V} />
         </div>
       </div>
@@ -675,7 +798,7 @@ function Admin({ user, go, onLogout, orders = [] }) {
         <span style={{ fontSize:22 }}>🎉</span>
         <div>
           <div style={{ fontSize:13, fontWeight:700, color:accent }}>Bienvenue, {user?.name?.split(" ")[0] || "cher restaurateur"} !</div>
-          <div style={{ fontSize:12, color:"#9CA3AF", marginTop:1 }}>Commencez par renseigner les infos de votre restaurant, puis ajoutez votre menu.</div>
+          <div style={{ fontSize:12, color:"#A89FB0", marginTop:1 }}>Commencez par renseigner les infos de votre restaurant, puis ajoutez votre menu.</div>
         </div>
       </div>
       {daysLeft !== null && daysLeft <= 5 && (
@@ -684,8 +807,8 @@ function Admin({ user, go, onLogout, orders = [] }) {
           <button type="button" onClick={payerAbonnement} style={{ padding:"7px 14px", borderRadius:20, background:R, color:"#fff", fontSize:12, fontWeight:700, border:"none", cursor:"pointer", fontFamily:"inherit" }}>Renouveler →</button>
         </div>
       )}
-      <div style={{ display:"flex", background:"#09090F", borderBottom:"1px solid #181824", overflowX:"auto" }}>
-        {TABS.map(t => (<button key={t.k} onClick={() => setTab(t.k)} style={{ flex:1, minWidth:60, padding:"10px 4px", background:"none", border:"none", borderBottom: tab === t.k ? `2px solid ${accent}` : "2px solid transparent", color: tab === t.k ? accent : "#6B7280", fontSize:10, fontWeight:700, cursor:"pointer", display:"flex", flexDirection:"column", alignItems:"center", gap:3 }}><span style={{ fontSize:16 }}>{t.i}</span>{t.l}</button>))}
+      <div style={{ display:"flex", background:"#0B0910", borderBottom:"1px solid #241D2F", overflowX:"auto" }}>
+        {TABS.map(t => (<button key={t.k} onClick={() => setTab(t.k)} style={{ flex:1, minWidth:60, padding:"10px 4px", background:"none", border:"none", borderBottom: tab === t.k ? `2px solid ${accent}` : "2px solid transparent", color: tab === t.k ? accent : "#8A8295", fontSize:10, fontWeight:700, cursor:"pointer", display:"flex", flexDirection:"column", alignItems:"center", gap:3 }}><span style={{ fontSize:16 }}>{t.i}</span>{t.l}</button>))}
       </div>
       <div style={{ flex:1, overflowY:"auto", padding:16, display:"flex", flexDirection:"column", gap:16 }}>
         {tab === "infos" && <>
@@ -704,18 +827,18 @@ function Admin({ user, go, onLogout, orders = [] }) {
             <Field l="Couleur principale de votre restaurant">
               <div style={{ display:"flex", alignItems:"center", gap:12 }}>
                 <input type="color" value={cfg.color} onChange={e => setCfg(c => ({ ...c, color:e.target.value }))} style={{ width:50, height:50, border:"none", background:"none", cursor:"pointer", borderRadius:10, padding:0 }} />
-                <span style={{ fontSize:14, fontWeight:600, fontFamily:"monospace", color:"#E8EAF0" }}>{cfg.color}</span>
+                <span style={{ fontSize:14, fontWeight:600, fontFamily:"monospace", color:"#F2ECE4" }}>{cfg.color}</span>
                 <div style={{ flex:1, height:38, borderRadius:10, background:cfg.color, boxShadow:`0 4px 18px ${cfg.color}60` }} />
               </div>
             </Field>
           </Card>
           <Card>
             <div style={{ fontSize:13, fontWeight:700, color:accent, marginBottom:4 }}>🔗 Votre lien client</div>
-            <p style={{ fontSize:12, color:"#6B7280", lineHeight:1.6 }}>C'est le lien à envoyer par SMS. Vos clients l'ouvrent sans compte et commandent directement.</p>
-            <div style={{ background:"#0E0F17", border:"1px solid #252836", borderRadius:10, padding:"10px 12px", fontSize:12, color:"#E8EAF0", wordBreak:"break-all", fontFamily:"monospace" }}>{publicLink || "Connectez-vous pour générer votre lien"}</div>
+            <p style={{ fontSize:12, color:"#8A8295", lineHeight:1.6 }}>C'est le lien à envoyer par SMS. Vos clients l'ouvrent sans compte et commandent directement.</p>
+            <div style={{ background:"#130F1A", border:"1px solid #34293F", borderRadius:10, padding:"10px 12px", fontSize:12, color:"#F2ECE4", wordBreak:"break-all", fontFamily:"monospace" }}>{publicLink || "Connectez-vous pour générer votre lien"}</div>
             <div style={{ display:"flex", gap:8 }}>
               <button type="button" onClick={() => { try { navigator.clipboard.writeText(publicLink); setToast("✓ Lien copié"); setTimeout(() => setToast(""), 2000); } catch (e) { setToast("Copie impossible, sélectionnez le lien"); setTimeout(() => setToast(""), 2500); } }} style={{ flex:1, padding:"11px", borderRadius:10, background:accent, color:"#fff", border:"none", fontWeight:700, fontSize:13, cursor:"pointer" }}>📋 Copier le lien</button>
-              <button type="button" onClick={() => publicLink && window.open(publicLink, "_blank")} style={{ padding:"11px 16px", borderRadius:10, background:"#181824", color:"#E8EAF0", border:"1px solid #252836", fontWeight:700, fontSize:13, cursor:"pointer" }}>Ouvrir ↗</button>
+              <button type="button" onClick={() => publicLink && window.open(publicLink, "_blank")} style={{ padding:"11px 16px", borderRadius:10, background:"#241D2F", color:"#F2ECE4", border:"1px solid #34293F", fontWeight:700, fontSize:13, cursor:"pointer" }}>Ouvrir ↗</button>
             </div>
           </Card>
           <SaveBtn saved={saved} onClick={save} accent={accent} />
@@ -725,16 +848,16 @@ function Admin({ user, go, onLogout, orders = [] }) {
           <Card>
             <div style={{ fontSize:11, fontWeight:700, color:V, letterSpacing:1, marginBottom:8 }}>VARIABLES DISPONIBLES</div>
             <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:4 }}>
-              {["{nom}", "{lien}", "{horaires}"].map(v => (<span key={v} style={{ background:"#181824", border:"1px solid #252836", borderRadius:8, padding:"4px 10px", fontSize:12, color:accent, fontWeight:700, fontFamily:"monospace" }}>{v}</span>))}
+              {["{nom}", "{lien}", "{horaires}"].map(v => (<span key={v} style={{ background:"#241D2F", border:"1px solid #34293F", borderRadius:8, padding:"4px 10px", fontSize:12, color:accent, fontWeight:700, fontFamily:"monospace" }}>{v}</span>))}
             </div>
-            <p style={{ fontSize:12, color:"#555B6E" }}>{"{lien}"} = lien cliquable qui ouvre votre chatbot</p>
+            <p style={{ fontSize:12, color:"#6B6378" }}>{"{lien}"} = lien cliquable qui ouvre votre chatbot</p>
           </Card>
           <Card>
             <Field l="Message SMS envoyé au client"><textarea value={cfg.sms} onChange={e => setCfg(c => ({ ...c, sms:e.target.value }))} rows={4} maxLength={320} style={{ ...I, resize:"none", lineHeight:1.7 }} /></Field>
           </Card>
           <Card>
-            <div style={{ fontSize:11, fontWeight:700, color:"#6B7280", letterSpacing:1, marginBottom:12 }}>APERÇU SMS REÇU PAR LE CLIENT</div>
-            <div style={{ background:"#0E0F17", borderRadius:"16px 16px 16px 4px", padding:"14px 16px", fontSize:14, lineHeight:1.8, border:"1px solid #181824", wordBreak:"break-word", color:"#E8EAF0" }}>
+            <div style={{ fontSize:11, fontWeight:700, color:"#8A8295", letterSpacing:1, marginBottom:12 }}>APERÇU SMS REÇU PAR LE CLIENT</div>
+            <div style={{ background:"#130F1A", borderRadius:"16px 16px 16px 4px", padding:"14px 16px", fontSize:14, lineHeight:1.8, border:"1px solid #241D2F", wordBreak:"break-word", color:"#F2ECE4" }}>
               {cfg.sms.replace("{nom}", cfg.name || "Votre resto").replace("{horaires}", `${cfg.hours1} / ${cfg.hours2}`).split("{lien}").map((part, i, arr) => i < arr.length - 1 ? <span key={i}>{part}<span style={{ color:accent, textDecoration:"underline", fontWeight:700 }}>{cfg.link}</span></span> : <span key={i}>{part}</span>)}
             </div>
           </Card>
@@ -761,7 +884,7 @@ function Admin({ user, go, onLogout, orders = [] }) {
           <Card>
             <div style={{ fontSize:13, fontWeight:700, marginBottom:10 }}>Catégories</div>
             <div style={{ display:"flex", flexWrap:"wrap", gap:8, marginBottom:12 }}>
-              {cats.map(cat => (<span key={cat} style={{ background:"#181824", border:`1px solid ${accent}45`, borderRadius:20, padding:"5px 14px", fontSize:12, fontWeight:700, color:accent, display:"flex", alignItems:"center", gap:6 }}>{cat} <span onClick={() => setCats(cs => cs.filter(x => x !== cat))} style={{ cursor:"pointer", color:"#6B7280", fontWeight:900, fontSize:15, lineHeight:1 }}>×</span></span>))}
+              {cats.map(cat => (<span key={cat} style={{ background:"#241D2F", border:`1px solid ${accent}45`, borderRadius:20, padding:"5px 14px", fontSize:12, fontWeight:700, color:accent, display:"flex", alignItems:"center", gap:6 }}>{cat} <span onClick={() => setCats(cs => cs.filter(x => x !== cat))} style={{ cursor:"pointer", color:"#8A8295", fontWeight:900, fontSize:15, lineHeight:1 }}>×</span></span>))}
             </div>
             <div style={{ display:"flex", gap:8 }}>
               <input value={newCat} onChange={e => setNewCat(e.target.value)} placeholder="Nouvelle catégorie…" onKeyDown={e => { if (e.key === "Enter" && newCat.trim()) { setCats(c => [...c, newCat.trim()]); setNewCat(""); } }} style={{ ...I, flex:1 }} />
@@ -772,8 +895,8 @@ function Admin({ user, go, onLogout, orders = [] }) {
             <div style={{ fontSize:13, fontWeight:700, color:accent, marginBottom:10 }}>{editId !== null ? "✏️ Modifier l'article" : "➕ Ajouter un article"}</div>
             <Field l="Emoji">
               <div>
-                <button type="button" onClick={() => setShowEm(v => !v)} style={{ background:"#0E0F17", border:"1.5px solid #252836", borderRadius:10, padding:"9px 14px", fontSize:22, cursor:"pointer", display:"flex", alignItems:"center", gap:8, color:"#E8EAF0" }}>{form.emoji} <span style={{ fontSize:12, color:"#6B7280" }}>Changer ▾</span></button>
-                {showEm && (<div style={{ display:"flex", flexWrap:"wrap", gap:6, marginTop:10, background:"#0E0F17", border:"1px solid #252836", borderRadius:12, padding:12, maxHeight:150, overflowY:"auto" }}>{EMOJIS.map(em => (<button key={em} type="button" onClick={() => { setForm(f => ({ ...f, emoji:em })); setShowEm(false); }} style={{ fontSize:22, background:"none", border:"none", cursor:"pointer", padding:5, borderRadius:8 }}>{em}</button>))}</div>)}
+                <button type="button" onClick={() => setShowEm(v => !v)} style={{ background:"#130F1A", border:"1.5px solid #34293F", borderRadius:10, padding:"9px 14px", fontSize:22, cursor:"pointer", display:"flex", alignItems:"center", gap:8, color:"#F2ECE4" }}>{form.emoji} <span style={{ fontSize:12, color:"#8A8295" }}>Changer ▾</span></button>
+                {showEm && (<div style={{ display:"flex", flexWrap:"wrap", gap:6, marginTop:10, background:"#130F1A", border:"1px solid #34293F", borderRadius:12, padding:12, maxHeight:150, overflowY:"auto" }}>{EMOJIS.map(em => (<button key={em} type="button" onClick={() => { setForm(f => ({ ...f, emoji:em })); setShowEm(false); }} style={{ fontSize:22, background:"none", border:"none", cursor:"pointer", padding:5, borderRadius:8 }}>{em}</button>))}</div>)}
               </div>
             </Field>
             <Field l="Catégorie">
@@ -784,25 +907,25 @@ function Admin({ user, go, onLogout, orders = [] }) {
             <Field l="Description (optionnel)"><input value={form.desc} onChange={e => setForm(f => ({ ...f, desc:e.target.value }))} placeholder="ex: Pommes sarladaises" maxLength={120} style={I} /></Field>
             <div style={{ display:"flex", gap:10 }}>
               <button type="button" onClick={addItem} style={{ flex:1, padding:"12px", borderRadius:12, background:accent, color:"#fff", border:"none", fontWeight:700, fontSize:14, cursor:"pointer" }}>{editId !== null ? "✓ Mettre à jour" : "➕ Ajouter au menu"}</button>
-              {editId !== null && (<button type="button" onClick={() => { setEditId(null); setForm({ cat:"", name:"", price:"", emoji:"🍔", desc:"" }); }} style={{ padding:"12px 14px", borderRadius:12, background:"#181824", color:"#9CA3AF", border:"1px solid #252836", fontWeight:700, fontSize:13, cursor:"pointer" }}>Annuler</button>)}
+              {editId !== null && (<button type="button" onClick={() => { setEditId(null); setForm({ cat:"", name:"", price:"", emoji:"🍔", desc:"" }); }} style={{ padding:"12px 14px", borderRadius:12, background:"#241D2F", color:"#A89FB0", border:"1px solid #34293F", fontWeight:700, fontSize:13, cursor:"pointer" }}>Annuler</button>)}
             </div>
           </Card>
-          {menu.length === 0 && (<div style={{ textAlign:"center", color:"#555B6E", padding:"32px 0" }}><div style={{ fontSize:36, marginBottom:10 }}>🍽️</div><div style={{ fontSize:14 }}>Votre menu est vide.<br />Ajoutez votre premier plat ci-dessus.</div></div>)}
+          {menu.length === 0 && (<div style={{ textAlign:"center", color:"#6B6378", padding:"32px 0" }}><div style={{ fontSize:36, marginBottom:10 }}>🍽️</div><div style={{ fontSize:14 }}>Votre menu est vide.<br />Ajoutez votre premier plat ci-dessus.</div></div>)}
           {Object.entries(grouped).map(([cat, items]) => (
             <div key={cat}>
-              <div style={{ fontSize:10, fontWeight:700, color:"#6B7280", textTransform:"uppercase", letterSpacing:1.5, marginBottom:10, paddingLeft:4 }}>{cat} · {items.length} article{items.length > 1 ? "s" : ""}</div>
+              <div style={{ fontSize:10, fontWeight:700, color:"#8A8295", textTransform:"uppercase", letterSpacing:1.5, marginBottom:10, paddingLeft:4 }}>{cat} · {items.length} article{items.length > 1 ? "s" : ""}</div>
               <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
                 {items.map(item => (
-                  <div key={item.id} className="fu" style={{ background: item.on ? "#111420" : "#0C0D14", border:`1px solid ${item.on ? "#252836" : "#181824"}`, borderRadius:14, padding:14, display:"flex", alignItems:"center", gap:12, opacity: item.on ? 1 : .45 }}>
+                  <div key={item.id} className="fu" style={{ background: item.on ? "#181320" : "#0E0B14", border:`1px solid ${item.on ? "#34293F" : "#241D2F"}`, borderRadius:14, padding:14, display:"flex", alignItems:"center", gap:12, opacity: item.on ? 1 : .45 }}>
                     <span style={{ fontSize:26, flexShrink:0 }}>{item.emoji}</span>
                     <div style={{ flex:1, minWidth:0 }}>
-                      <div style={{ fontSize:14, fontWeight:700, color:"#E8EAF0" }}>{item.name}</div>
-                      {item.desc && <div style={{ fontSize:11, color:"#6B7280", marginTop:2 }}>{item.desc}</div>}
+                      <div style={{ fontSize:14, fontWeight:700, color:"#F2ECE4" }}>{item.name}</div>
+                      {item.desc && <div style={{ fontSize:11, color:"#8A8295", marginTop:2 }}>{item.desc}</div>}
                       <div style={{ fontSize:13, fontWeight:800, color:OR, marginTop:5 }}>{item.price}€</div>
                     </div>
                     <div style={{ display:"flex", flexDirection:"column", gap:6, flexShrink:0 }}>
-                      <button type="button" onClick={() => setMenu(m => m.map(i => i.id === item.id ? { ...i, on:!i.on } : i))} style={{ padding:"5px 10px", borderRadius:8, fontSize:10, fontWeight:700, background: item.on ? `${V}20` : "#6B728020", border:`1px solid ${item.on ? V+"45" : "#6B728045"}`, color: item.on ? V : "#9CA3AF", cursor:"pointer" }}>{item.on ? "Actif" : "Caché"}</button>
-                      <button type="button" onClick={() => startEdit(item)} style={{ padding:"5px 10px", borderRadius:8, fontSize:10, fontWeight:700, background:"#181824", border:"1px solid #252836", color:"#E8EAF0", cursor:"pointer" }}>✏️ Éditer</button>
+                      <button type="button" onClick={() => setMenu(m => m.map(i => i.id === item.id ? { ...i, on:!i.on } : i))} style={{ padding:"5px 10px", borderRadius:8, fontSize:10, fontWeight:700, background: item.on ? `${V}20` : "#8A829520", border:`1px solid ${item.on ? V+"45" : "#8A829545"}`, color: item.on ? V : "#A89FB0", cursor:"pointer" }}>{item.on ? "Actif" : "Caché"}</button>
+                      <button type="button" onClick={() => startEdit(item)} style={{ padding:"5px 10px", borderRadius:8, fontSize:10, fontWeight:700, background:"#241D2F", border:"1px solid #34293F", color:"#F2ECE4", cursor:"pointer" }}>✏️ Éditer</button>
                       <button type="button" onClick={() => setMenu(m => m.filter(i => i.id !== item.id))} style={{ padding:"5px 10px", borderRadius:8, fontSize:10, fontWeight:700, background:"#EF444420", border:"1px solid #EF444440", color:"#EF4444", cursor:"pointer" }}>🗑️</button>
                     </div>
                   </div>
@@ -815,15 +938,15 @@ function Admin({ user, go, onLogout, orders = [] }) {
         {tab === "stats" && <>
           <STitle>Statistiques du mois</STitle>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
-            {[{ l:"Commandes", v:String(cmdList.length), i:"🍔" },{ l:"Réservations", v:String(resList.length), i:"📅" },{ l:"CA commandes", v:`${ca.toFixed(2).replace(".", ",")}€`, i:"💰" },{ l:"Total reçus", v:String(orders.length), i:"📈" },{ l:"SMS envoyés", v:"—", i:"💬" },{ l:"Clics chatbot", v:"—", i:"👆" }].map(s => (<div key={s.l} style={{ background:"#111420", border:"1px solid #181824", borderRadius:16, padding:"18px 16px" }}><div style={{ fontSize:22, marginBottom:8 }}>{s.i}</div><div style={{ fontFamily:"'Syne',sans-serif", fontSize:28, fontWeight:900, color:accent, lineHeight:1 }}>{s.v}</div><div style={{ fontSize:11, color:"#6B7280", marginTop:7, fontWeight:600 }}>{s.l}</div></div>))}
+            {[{ l:"Commandes", v:String(cmdList.length), i:"🍔" },{ l:"Réservations", v:String(resList.length), i:"📅" },{ l:"CA commandes", v:`${ca.toFixed(2).replace(".", ",")}€`, i:"💰" },{ l:"Total reçus", v:String(orders.length), i:"📈" },{ l:"SMS envoyés", v:"—", i:"💬" },{ l:"Clics chatbot", v:"—", i:"👆" }].map(s => (<div key={s.l} style={{ background:"#181320", border:"1px solid #241D2F", borderRadius:16, padding:"18px 16px" }}><div style={{ fontSize:22, marginBottom:8 }}>{s.i}</div><div style={{ fontFamily:"'Syne',sans-serif", fontSize:28, fontWeight:900, color:accent, lineHeight:1 }}>{s.v}</div><div style={{ fontSize:11, color:"#8A8295", marginTop:7, fontWeight:600 }}>{s.l}</div></div>))}
           </div>
-          <p style={{ fontSize:11, color:"#555B6E", textAlign:"center", lineHeight:1.6 }}>« SMS envoyés » et « Clics » s'afficheront quand le vrai système SMS sera branché.</p>
-          <div style={{ background:"#111420", border:"1px solid #181824", borderRadius:16, padding:20 }}>
+          <p style={{ fontSize:11, color:"#6B6378", textAlign:"center", lineHeight:1.6 }}>« SMS envoyés » et « Clics » s'afficheront quand le vrai système SMS sera branché.</p>
+          <div style={{ background:"#181320", border:"1px solid #241D2F", borderRadius:16, padding:20 }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-              <div><div style={{ fontSize:16, fontWeight:800 }}>Plan {planName}</div><div style={{ fontSize:12, color: daysLeft !== null && daysLeft <= 5 ? OR : "#6B7280", marginTop:3 }}>{aboFin ? `Actif jusqu'au ${aboFin.toLocaleDateString("fr-FR")} · ${daysLeft <= 0 ? "expiré" : daysLeft + " jour" + (daysLeft > 1 ? "s" : "") + " restant" + (daysLeft > 1 ? "s" : "")}` : "Abonnement mensuel"}</div></div>
-              <div style={{ fontFamily:"'Syne',sans-serif", fontSize:22, fontWeight:900, color:accent }}>{planPrice.toFixed(2).replace(".", ",")}€<span style={{ fontSize:12, color:"#6B7280", fontWeight:600 }}>/mois</span></div>
+              <div><div style={{ fontSize:16, fontWeight:800 }}>Plan {planName}</div><div style={{ fontSize:12, color: daysLeft !== null && daysLeft <= 5 ? OR : "#8A8295", marginTop:3 }}>{aboFin ? `Actif jusqu'au ${aboFin.toLocaleDateString("fr-FR")} · ${daysLeft <= 0 ? "expiré" : daysLeft + " jour" + (daysLeft > 1 ? "s" : "") + " restant" + (daysLeft > 1 ? "s" : "")}` : "Abonnement mensuel"}</div></div>
+              <div style={{ fontFamily:"'Syne',sans-serif", fontSize:22, fontWeight:900, color:accent }}>{planPrice.toFixed(2).replace(".", ",")}€<span style={{ fontSize:12, color:"#8A8295", fontWeight:600 }}>/mois</span></div>
             </div>
-            <button type="button" onClick={payerAbonnement} style={{ display:"block", width:"100%", textAlign:"center", marginTop:14, padding:"11px", borderRadius:10, background: daysLeft !== null && daysLeft <= 5 ? R : "#181824", color:"#fff", fontWeight:700, fontSize:13, border: daysLeft !== null && daysLeft <= 5 ? "none" : "1px solid #252836", cursor:"pointer", fontFamily:"inherit" }}>💳 Renouveler avec SumUp</button>
+            <button type="button" onClick={payerAbonnement} style={{ display:"block", width:"100%", textAlign:"center", marginTop:14, padding:"11px", borderRadius:10, background: daysLeft !== null && daysLeft <= 5 ? R : "#241D2F", color:"#fff", fontWeight:700, fontSize:13, border: daysLeft !== null && daysLeft <= 5 ? "none" : "1px solid #34293F", cursor:"pointer", fontFamily:"inherit" }}>💳 Renouveler avec SumUp</button>
           </div>
         </>}
       </div>
@@ -846,20 +969,20 @@ function Simulator({ go, user }) {
     <div style={{ minHeight:"100vh", display:"flex", flexDirection:"column", maxWidth:480, margin:"0 auto" }}>
       <TopBar title="Simulateur" sub="Testez le flux client complet" onBack={() => go(user ? "admin" : "landing")} />
       <div style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:24, gap:22 }}>
-        <div style={{ width:174, height:296, background:"#111420", borderRadius:36, border:`2px solid ${phase === "ringing" ? R : "#252836"}`, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:14, position:"relative", overflow:"hidden", animation: phase === "ringing" ? "glow 1s ease-in-out infinite" : "none" }}>
+        <div style={{ width:174, height:296, background:"#181320", borderRadius:36, border:`2px solid ${phase === "ringing" ? R : "#34293F"}`, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:14, position:"relative", overflow:"hidden", animation: phase === "ringing" ? "glow 1s ease-in-out infinite" : "none" }}>
           {phase === "ringing" && <div style={{ position:"absolute", inset:0, background:`radial-gradient(circle,${R}18 0%,transparent 70%)`, animation:"pulse .7s ease-in-out infinite" }} />}
           <div style={{ fontSize:54, animation: phase === "ringing" ? "ring .42s ease-in-out infinite" : "none" }}>{phase === "idle" ? "📵" : phase === "ringing" ? "📱" : phase === "missed" ? "📵" : "💬"}</div>
           <div style={{ fontSize:13, textAlign:"center", padding:"0 20px", lineHeight:1.7 }}>
-            {phase === "idle" && <span style={{ color:"#6B7280" }}>Prêt à simuler</span>}
+            {phase === "idle" && <span style={{ color:"#8A8295" }}>Prêt à simuler</span>}
             {phase === "ringing" && <span style={{ color:R, fontWeight:700, whiteSpace:"pre-line" }}>{"Appel entrant…\n+33 6 00 11 22 33"}</span>}
             {phase === "missed" && <span style={{ color:"#EF4444", fontWeight:700 }}>Appel manqué</span>}
             {phase === "sms" && <span style={{ color:V, fontWeight:700 }}>SMS envoyé ✓</span>}
           </div>
         </div>
         <div style={{ width:"100%", display:"flex", flexDirection:"column", gap:10 }}>
-          {steps.map((s, i) => (<div key={i} style={{ display:"flex", alignItems:"center", gap:12, background: s.done ? `${V}0E` : "#111420", border:`1px solid ${s.done ? V+"45" : "#181824"}`, borderRadius:12, padding:"12px 16px" }}><span style={{ fontSize:18 }}>{s.done ? "✅" : "⬜"}</span><span style={{ fontSize:14, fontWeight:600, color: s.done ? V : "#6B7280" }}>{s.l}</span></div>))}
+          {steps.map((s, i) => (<div key={i} style={{ display:"flex", alignItems:"center", gap:12, background: s.done ? `${V}0E` : "#181320", border:`1px solid ${s.done ? V+"45" : "#241D2F"}`, borderRadius:12, padding:"12px 16px" }}><span style={{ fontSize:18 }}>{s.done ? "✅" : "⬜"}</span><span style={{ fontSize:14, fontWeight:600, color: s.done ? V : "#8A8295" }}>{s.l}</span></div>))}
         </div>
-        {phase === "sms" && (<div className="fu" style={{ width:"100%", background:"#111420", border:`1px solid ${V}40`, borderRadius:16, padding:16 }}><div style={{ fontSize:10, fontWeight:700, color:V, letterSpacing:1.2, marginBottom:10 }}>SMS REÇU PAR LE CLIENT</div><div style={{ background:"#0E0F17", borderRadius:"16px 16px 16px 4px", padding:"13px 16px", fontSize:14, lineHeight:1.8, color:"#E8EAF0", border:"1px solid #181824" }}>Bonjour ! Nous n'avons pas pu répondre à votre appel. Cliquez ici pour commander ou réserver 👉 <span onClick={() => go("chatbot")} style={{ color:R, textDecoration:"underline", cursor:"pointer", fontWeight:700 }}>Ouvrir le chatbot →</span></div></div>)}
+        {phase === "sms" && (<div className="fu" style={{ width:"100%", background:"#181320", border:`1px solid ${V}40`, borderRadius:16, padding:16 }}><div style={{ fontSize:10, fontWeight:700, color:V, letterSpacing:1.2, marginBottom:10 }}>SMS REÇU PAR LE CLIENT</div><div style={{ background:"#130F1A", borderRadius:"16px 16px 16px 4px", padding:"13px 16px", fontSize:14, lineHeight:1.8, color:"#F2ECE4", border:"1px solid #241D2F" }}>Bonjour ! Nous n'avons pas pu répondre à votre appel. Cliquez ici pour commander ou réserver 👉 <span onClick={() => go("chatbot")} style={{ color:R, textDecoration:"underline", cursor:"pointer", fontWeight:700 }}>Ouvrir le chatbot →</span></div></div>)}
         {phase === "idle" && <PrimaryBtn lg full onClick={start}>📞 Simuler un appel manqué</PrimaryBtn>}
         {phase === "sms" && (<><PrimaryBtn lg full onClick={() => go("chatbot")}>💬 Cliquer sur le lien (voir le chatbot) →</PrimaryBtn><GhostBtn full onClick={() => setPhase("idle")}>Recommencer</GhostBtn></>)}
       </div>
@@ -1027,13 +1150,13 @@ function Chatbot({ go, user, restoId, isPublic }) {
     <div style={{ minHeight:"100vh", display:"flex", flexDirection:"column", maxWidth:480, margin:"0 auto" }}>
       <TopBar title={`🍽️ ${restoName}`} sub="Commandes & Réservations" onBack={() => go(user ? "admin" : "landing")} dot={V} />
       <div style={{ flex:1, overflowY:"auto", padding:"14px 14px 8px", display:"flex", flexDirection:"column", gap:12 }}>
-        {msgs.map((m, i) => (<div key={i} className="fu" style={{ display:"flex", justifyContent: m.r === "usr" ? "flex-end" : "flex-start", gap:8 }}>{m.r === "bot" && <div style={{ width:32, height:32, background:`${R}25`, borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, flexShrink:0, alignSelf:"flex-end" }}>🤖</div>}<div style={{ maxWidth:"80%", background: m.r === "usr" ? R : "#111420", border: m.r === "bot" ? "1px solid #181824" : "none", borderRadius: m.r === "usr" ? "18px 18px 4px 18px" : "18px 18px 18px 4px", padding:"12px 14px", fontSize:14, lineHeight:1.8, color:"#E8EAF0", whiteSpace:"pre-wrap", wordBreak:"break-word" }}>{m.t}</div></div>))}
+        {msgs.map((m, i) => (<div key={i} className="fu" style={{ display:"flex", justifyContent: m.r === "usr" ? "flex-end" : "flex-start", gap:8 }}>{m.r === "bot" && <div style={{ width:32, height:32, background:`${R}25`, borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, flexShrink:0, alignSelf:"flex-end" }}>🤖</div>}<div style={{ maxWidth:"80%", background: m.r === "usr" ? R : "#181320", border: m.r === "bot" ? "1px solid #241D2F" : "none", borderRadius: m.r === "usr" ? "18px 18px 4px 18px" : "18px 18px 18px 4px", padding:"12px 14px", fontSize:14, lineHeight:1.8, color:"#F2ECE4", whiteSpace:"pre-wrap", wordBreak:"break-word" }}>{m.t}</div></div>))}
 
         {/* Choix des catégories */}
         {inOrder && (
           <div className="fu" style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
             {catsWithItems.map(c => (
-              <button key={c} type="button" onClick={() => { setSelCat(c); if (flow === "order_cat") pickCat(c); }} style={{ padding:"8px 14px", borderRadius:22, background: selCat === c ? R : "#111420", border:`1.5px solid ${selCat === c ? R : R+"40"}`, color: selCat === c ? "#fff" : R, fontSize:13, fontWeight:700, cursor:"pointer" }}>{c}</button>
+              <button key={c} type="button" onClick={() => { setSelCat(c); if (flow === "order_cat") pickCat(c); }} style={{ padding:"8px 14px", borderRadius:22, background: selCat === c ? R : "#181320", border:`1.5px solid ${selCat === c ? R : R+"40"}`, color: selCat === c ? "#fff" : R, fontSize:13, fontWeight:700, cursor:"pointer" }}>{c}</button>
             ))}
           </div>
         )}
@@ -1042,11 +1165,11 @@ function Chatbot({ go, user, restoId, isPublic }) {
         {flow === "order_items" && selCat && (
           <div className="fu" style={{ display:"flex", flexDirection:"column", gap:8 }}>
             {items.map(it => (
-              <div key={it.id} style={{ display:"flex", alignItems:"center", gap:12, background:"#111420", border:"1px solid #252836", borderRadius:14, padding:"10px 14px" }}>
+              <div key={it.id} style={{ display:"flex", alignItems:"center", gap:12, background:"#181320", border:"1px solid #34293F", borderRadius:14, padding:"10px 14px" }}>
                 <span style={{ fontSize:24 }}>{it.emoji}</span>
                 <div style={{ flex:1, minWidth:0 }}>
-                  <div style={{ fontSize:14, fontWeight:700, color:"#E8EAF0" }}>{it.name}</div>
-                  {it.desc && <div style={{ fontSize:11, color:"#6B7280", marginTop:1 }}>{it.desc}</div>}
+                  <div style={{ fontSize:14, fontWeight:700, color:"#F2ECE4" }}>{it.name}</div>
+                  {it.desc && <div style={{ fontSize:11, color:"#8A8295", marginTop:1 }}>{it.desc}</div>}
                   <div style={{ fontSize:13, fontWeight:800, color:OR, marginTop:3 }}>{priceNum(it.price).toFixed(2)}€</div>
                 </div>
                 <button type="button" onClick={() => addToCart(it)} style={{ padding:"8px 14px", borderRadius:10, background:R, color:"#fff", border:"none", fontWeight:700, fontSize:13, cursor:"pointer" }}>＋ Ajouter</button>
@@ -1057,35 +1180,35 @@ function Chatbot({ go, user, restoId, isPublic }) {
 
         {/* Panier */}
         {inOrder && cart.length > 0 && (
-          <div className="fu" style={{ background:"#111420", border:`1px solid ${R}45`, borderRadius:14, padding:"12px 14px" }}>
+          <div className="fu" style={{ background:"#181320", border:`1px solid ${R}45`, borderRadius:14, padding:"12px 14px" }}>
             <div style={{ fontSize:11, fontWeight:700, color:R, letterSpacing:1, marginBottom:10 }}>🛒 VOTRE PANIER</div>
             {cart.map(c => (
               <div key={c.id} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:8, marginBottom:8 }}>
-                <div style={{ fontSize:13, color:"#E8EAF0", flex:1, minWidth:0 }}>{c.emoji} {c.name}</div>
+                <div style={{ fontSize:13, color:"#F2ECE4", flex:1, minWidth:0 }}>{c.emoji} {c.name}</div>
                 <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                  <button type="button" onClick={() => changeQty(c.id, -1)} style={{ width:26, height:26, borderRadius:7, background:"#181824", border:"1px solid #252836", color:"#E8EAF0", fontSize:16, cursor:"pointer", lineHeight:1 }}>−</button>
+                  <button type="button" onClick={() => changeQty(c.id, -1)} style={{ width:26, height:26, borderRadius:7, background:"#241D2F", border:"1px solid #34293F", color:"#F2ECE4", fontSize:16, cursor:"pointer", lineHeight:1 }}>−</button>
                   <span style={{ fontSize:14, fontWeight:700, minWidth:18, textAlign:"center" }}>{c.qty}</span>
-                  <button type="button" onClick={() => changeQty(c.id, 1)} disabled={c.qty >= LIMITS.qty.max} style={{ width:26, height:26, borderRadius:7, background: c.qty >= LIMITS.qty.max ? "#181824" : R, border:"none", color:"#fff", fontSize:16, cursor: c.qty >= LIMITS.qty.max ? "not-allowed" : "pointer", lineHeight:1 }}>＋</button>
+                  <button type="button" onClick={() => changeQty(c.id, 1)} disabled={c.qty >= LIMITS.qty.max} style={{ width:26, height:26, borderRadius:7, background: c.qty >= LIMITS.qty.max ? "#241D2F" : R, border:"none", color:"#fff", fontSize:16, cursor: c.qty >= LIMITS.qty.max ? "not-allowed" : "pointer", lineHeight:1 }}>＋</button>
                   <span style={{ fontSize:13, fontWeight:800, color:OR, minWidth:54, textAlign:"right" }}>{(c.price * c.qty).toFixed(2)}€</span>
                 </div>
               </div>
             ))}
-            <div style={{ borderTop:"1px solid #252836", marginTop:8, paddingTop:10, display:"flex", justifyContent:"space-between", fontWeight:800, fontSize:15 }}>
+            <div style={{ borderTop:"1px solid #34293F", marginTop:8, paddingTop:10, display:"flex", justifyContent:"space-between", fontWeight:800, fontSize:15 }}>
               <span>Total</span><span style={{ color:OR }}>{cartTotal.toFixed(2)}€</span>
             </div>
             <button type="button" onClick={startRecap} style={{ width:"100%", marginTop:12, padding:"12px", borderRadius:12, background:V, color:"#fff", border:"none", fontWeight:800, fontSize:14, cursor:"pointer" }}>Valider la commande →</button>
-            <p style={{ fontSize:11, color:"#555B6E", textAlign:"center", marginTop:8 }}>Maximum {LIMITS.qty.max} par article</p>
+            <p style={{ fontSize:11, color:"#6B6378", textAlign:"center", marginTop:8 }}>Maximum {LIMITS.qty.max} par article</p>
           </div>
         )}
 
         {done && (<div className="fu" style={{ background:`${V}10`, border:`1px solid ${V}45`, borderRadius:14, padding:16, textAlign:"center" }}><div style={{ fontSize:14, fontWeight:700, color:V, marginBottom: isPublic ? 0 : 12 }}>🎉 Transmis au restaurant !</div>{!isPublic && <button type="button" onClick={() => go("dashboard")} style={{ padding:"10px 24px", borderRadius:22, background:V, color:"#fff", border:"none", fontWeight:700, fontSize:13, cursor:"pointer", fontFamily:"inherit" }}>Voir dans le dashboard →</button>}</div>)}
         <div ref={ref} />
       </div>
-      {curQR.length > 0 && !done && (<div style={{ padding:"8px 14px", display:"flex", gap:8, overflowX:"auto", borderTop:"1px solid #181824", background:"#09090F" }}>{curQR.map(r => (<button key={r} type="button" onClick={() => q(r)} style={{ flexShrink:0, padding:"8px 14px", borderRadius:22, background:"#111420", border:`1px solid ${R}50`, color:R, fontSize:13, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap", fontFamily:"inherit" }}>{r}</button>))}</div>)}
-      {isPublic && <p style={{ fontSize:10, color:"#555B6E", textAlign:"center", padding:"6px 16px 0", background:"#09090F" }}>En validant une commande, vous acceptez le traitement de vos informations pour la gérer. <span onClick={() => go("confidentialite")} style={{ color:"#9CA3AF", textDecoration:"underline", cursor:"pointer" }}>Confidentialité</span></p>}
-      <div style={{ padding:"10px 14px 24px", background:"#09090F", borderTop:"1px solid #181824", display:"flex", gap:10, alignItems:"center" }}>
-        <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === "Enter" && send()} placeholder="Écrivez votre message…" maxLength={200} style={{ flex:1, background:"#111420", border:"1.5px solid #252836", borderRadius:14, color:"#E8EAF0", fontSize:14, padding:"12px 14px", fontFamily:"inherit" }} />
-        <button type="button" onClick={send} disabled={!input.trim()} style={{ width:46, height:46, borderRadius:13, flexShrink:0, background: input.trim() ? R : "#252836", border:"none", cursor: input.trim() ? "pointer" : "not-allowed", display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, color:"#fff" }}>➤</button>
+      {curQR.length > 0 && !done && (<div style={{ padding:"8px 14px", display:"flex", gap:8, overflowX:"auto", borderTop:"1px solid #241D2F", background:"#0B0910" }}>{curQR.map(r => (<button key={r} type="button" onClick={() => q(r)} style={{ flexShrink:0, padding:"8px 14px", borderRadius:22, background:"#181320", border:`1px solid ${R}50`, color:R, fontSize:13, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap", fontFamily:"inherit" }}>{r}</button>))}</div>)}
+      {isPublic && <p style={{ fontSize:10, color:"#6B6378", textAlign:"center", padding:"6px 16px 0", background:"#0B0910" }}>En validant une commande, vous acceptez le traitement de vos informations pour la gérer. <span onClick={() => go("confidentialite")} style={{ color:"#A89FB0", textDecoration:"underline", cursor:"pointer" }}>Confidentialité</span></p>}
+      <div style={{ padding:"10px 14px 24px", background:"#0B0910", borderTop:"1px solid #241D2F", display:"flex", gap:10, alignItems:"center" }}>
+        <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === "Enter" && send()} placeholder="Écrivez votre message…" maxLength={200} style={{ flex:1, background:"#181320", border:"1.5px solid #34293F", borderRadius:14, color:"#F2ECE4", fontSize:14, padding:"12px 14px", fontFamily:"inherit" }} />
+        <button type="button" onClick={send} disabled={!input.trim()} style={{ width:46, height:46, borderRadius:13, flexShrink:0, background: input.trim() ? R : "#34293F", border:"none", cursor: input.trim() ? "pointer" : "not-allowed", display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, color:"#fff" }}>➤</button>
       </div>
     </div>
   );
@@ -1172,21 +1295,21 @@ function Dashboard({ go, orders, user }) {
     <div style={{ minHeight:"100vh", display:"flex", flexDirection:"column", maxWidth:"100%", margin:"0 auto" }}>
       <TopBar title="Commandes en cours" onBack={() => go("admin")} badge={nb} />
       {flash && (<div className="fu" style={{ background:`${V}18`, borderBottom:`1px solid ${V}55`, padding:"10px 16px", textAlign:"center", fontSize:14, fontWeight:800, color:V }}>🔔 Nouvelle commande reçue !</div>)}
-      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:8, padding:"8px 14px", background:"#09090F", borderBottom:"1px solid #181824", flexWrap:"wrap" }}>
-        <span style={{ fontSize:11, color:"#6B7280", display:"flex", alignItems:"center", gap:6 }}><span style={{ width:7, height:7, borderRadius:"50%", background:V, display:"inline-block", animation:"blink 1.6s infinite" }} />En direct</span>
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:8, padding:"8px 14px", background:"#0B0910", borderBottom:"1px solid #241D2F", flexWrap:"wrap" }}>
+        <span style={{ fontSize:11, color:"#8A8295", display:"flex", alignItems:"center", gap:6 }}><span style={{ width:7, height:7, borderRadius:"50%", background:V, display:"inline-block", animation:"blink 1.6s infinite" }} />En direct</span>
         <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
-          <select value={soundType} onChange={e => { const v = e.target.value; setSoundType(v); ensureAudio(); playSound(audioRef.current, v); }} style={{ padding:"7px 10px", borderRadius:20, background:"#111420", border:"1px solid #252836", color:"#E8EAF0", fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:"inherit" }}>
+          <select value={soundType} onChange={e => { const v = e.target.value; setSoundType(v); ensureAudio(); playSound(audioRef.current, v); }} style={{ padding:"7px 10px", borderRadius:20, background:"#181320", border:"1px solid #34293F", color:"#F2ECE4", fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:"inherit" }}>
             {SOUNDS.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
           </select>
-          <button type="button" onClick={() => { ensureAudio(); beep(); }} style={{ padding:"6px 12px", borderRadius:20, background:"#181824", border:"1px solid #252836", color:"#E8EAF0", fontSize:12, fontWeight:700, cursor:"pointer" }}>🔊 Tester</button>
-          <button type="button" onClick={() => { ensureAudio(); setSoundOn(s => !s); }} style={{ padding:"6px 12px", borderRadius:20, background: soundOn ? `${V}18` : "#181824", border:`1px solid ${soundOn ? V+"55" : "#252836"}`, color: soundOn ? V : "#9CA3AF", fontSize:12, fontWeight:700, cursor:"pointer" }}>{soundOn ? "🔔 Activé" : "🔕 Coupé"}</button>
+          <button type="button" onClick={() => { ensureAudio(); beep(); }} style={{ padding:"6px 12px", borderRadius:20, background:"#241D2F", border:"1px solid #34293F", color:"#F2ECE4", fontSize:12, fontWeight:700, cursor:"pointer" }}>🔊 Tester</button>
+          <button type="button" onClick={() => { ensureAudio(); setSoundOn(s => !s); }} style={{ padding:"6px 12px", borderRadius:20, background: soundOn ? `${V}18` : "#241D2F", border:`1px solid ${soundOn ? V+"55" : "#34293F"}`, color: soundOn ? V : "#A89FB0", fontSize:12, fontWeight:700, cursor:"pointer" }}>{soundOn ? "🔔 Activé" : "🔕 Coupé"}</button>
         </div>
       </div>
-      <div style={{ display:"flex", background:"#09090F", borderBottom:"1px solid #181824", padding:"0 12px" }}>
-        {[{ k:"en_cours", l:"⏳ En cours" }, { k:"pret", l:"✅ Prêt" }, { k:"all", l:"📋 Tout" }].map(t => (<button key={t.k} type="button" onClick={() => setFilter(t.k)} style={{ flex:1, padding:"12px 4px", background:"none", border:"none", borderBottom: filter === t.k ? `2px solid ${R}` : "2px solid transparent", color: filter === t.k ? R : "#6B7280", fontSize:13, fontWeight:700, cursor:"pointer", fontFamily:"inherit" }}>{t.l}</button>))}
+      <div style={{ display:"flex", background:"#0B0910", borderBottom:"1px solid #241D2F", padding:"0 12px" }}>
+        {[{ k:"en_cours", l:"⏳ En cours" }, { k:"pret", l:"✅ Prêt" }, { k:"all", l:"📋 Tout" }].map(t => (<button key={t.k} type="button" onClick={() => setFilter(t.k)} style={{ flex:1, padding:"12px 4px", background:"none", border:"none", borderBottom: filter === t.k ? `2px solid ${R}` : "2px solid transparent", color: filter === t.k ? R : "#8A8295", fontSize:13, fontWeight:700, cursor:"pointer", fontFamily:"inherit" }}>{t.l}</button>))}
       </div>
       <div style={{ flex:1, overflowY:"auto", padding:16, display:"flex", flexDirection:"column", gap:14 }}>
-        {list.length === 0 && (<div style={{ textAlign:"center", color:"#555B6E", marginTop:60 }}><div style={{ fontSize:44, marginBottom:14 }}>🍽️</div><div style={{ fontSize:15 }}>Aucune commande ici pour le moment.</div></div>)}
+        {list.length === 0 && (<div style={{ textAlign:"center", color:"#6B6378", marginTop:60 }}><div style={{ fontSize:44, marginBottom:14 }}>🍽️</div><div style={{ fontSize:15 }}>Aucune commande ici pour le moment.</div></div>)}
         {list.map((o, i) => <OrderCard key={o.id} o={o} i={i} />)}
       </div>
     </div>
@@ -1199,20 +1322,20 @@ function OrderCard({ o, i }) {
   const isPret = status === "pret";
   const isCmd = o.type === "commande";
   return (
-    <div className="fu" style={{ background:"#111420", border:`1.5px solid ${isPret ? V+"55" : isCmd ? R+"45" : "#3B82F645"}`, borderRadius:18, overflow:"hidden" }}>
+    <div className="fu" style={{ background:"#181320", border:`1.5px solid ${isPret ? V+"55" : isCmd ? R+"45" : "#3B82F645"}`, borderRadius:18, overflow:"hidden" }}>
       <div style={{ background: isPret ? `${V}15` : isCmd ? `${R}10` : "#3B82F610", padding:"12px 16px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-        <div style={{ display:"flex", alignItems:"center", gap:10 }}><span style={{ fontSize:22 }}>{isCmd ? "🍔" : "📅"}</span><div><div style={{ fontWeight:800, fontSize:15, color:"#E8EAF0" }}>{o.id}</div><div style={{ fontSize:12, color:"#6B7280", marginTop:1 }}>{o.client} · {o.time}</div></div></div>
-        <div style={{ fontSize:11, fontWeight:700, padding:"4px 12px", borderRadius:20, background: isPret ? `${V}25` : "#6B728022", border:`1px solid ${isPret ? V+"55" : "#6B728050"}`, color: isPret ? V : "#9CA3AF" }}>{isPret ? "✓ Prêt" : "En cours"}</div>
+        <div style={{ display:"flex", alignItems:"center", gap:10 }}><span style={{ fontSize:22 }}>{isCmd ? "🍔" : "📅"}</span><div><div style={{ fontWeight:800, fontSize:15, color:"#F2ECE4" }}>{o.id}</div><div style={{ fontSize:12, color:"#8A8295", marginTop:1 }}>{o.client} · {o.time}</div></div></div>
+        <div style={{ fontSize:11, fontWeight:700, padding:"4px 12px", borderRadius:20, background: isPret ? `${V}25` : "#8A829522", border:`1px solid ${isPret ? V+"55" : "#8A829550"}`, color: isPret ? V : "#A89FB0" }}>{isPret ? "✓ Prêt" : "En cours"}</div>
       </div>
       <div style={{ padding:"12px 16px", display:"flex", flexDirection:"column", gap:6 }}>
-        {o.items.map((it, j) => (<div key={j} style={{ display:"flex", alignItems:"center", gap:8, fontSize:14, color:"#C8CAD4" }}><span style={{ color:R, fontSize:11 }}>▸</span>{it}</div>))}
-        {o.note && <div style={{ marginTop:6, fontSize:12, color:"#6B7280", background:"#181824", borderRadius:8, padding:"6px 10px" }}>📝 {o.note}</div>}
+        {o.items.map((it, j) => (<div key={j} style={{ display:"flex", alignItems:"center", gap:8, fontSize:14, color:"#D2C9D6" }}><span style={{ color:R, fontSize:11 }}>▸</span>{it}</div>))}
+        {o.note && <div style={{ marginTop:6, fontSize:12, color:"#8A8295", background:"#241D2F", borderRadius:8, padding:"6px 10px" }}>📝 {o.note}</div>}
       </div>
       <div style={{ padding:"10px 16px 16px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
         <div style={{ fontWeight:800, fontSize:18, color:OR }}>{o.total}</div>
         <div style={{ display:"flex", gap:8 }}>
           {!isPret && status !== "termine" && (<button type="button" onClick={() => upd("pret")} style={{ padding:"9px 20px", borderRadius:10, background:V, color:"#fff", border:"none", fontWeight:800, fontSize:13, cursor:"pointer", fontFamily:"inherit" }}>✓ Marquer prêt</button>)}
-          {isPret && (<button type="button" onClick={() => upd("termine")} style={{ padding:"9px 20px", borderRadius:10, background:"#181824", color:"#9CA3AF", border:"1px solid #252836", fontWeight:700, fontSize:13, cursor:"pointer", fontFamily:"inherit" }}>Terminer</button>)}
+          {isPret && (<button type="button" onClick={() => upd("termine")} style={{ padding:"9px 20px", borderRadius:10, background:"#241D2F", color:"#A89FB0", border:"1px solid #34293F", fontWeight:700, fontSize:13, cursor:"pointer", fontFamily:"inherit" }}>Terminer</button>)}
         </div>
       </div>
     </div>
@@ -1269,16 +1392,16 @@ function Legal({ doc, go }) {
     <div style={{ minHeight:"100vh", maxWidth:760, margin:"0 auto" }}>
       <TopBar title={d.title} onBack={() => go("landing")} />
       <div style={{ padding:"24px 20px 60px" }}>
-        <div style={{ background:`${OR}12`, border:`1px solid ${OR}40`, borderRadius:12, padding:14, marginBottom:24, fontSize:13, color:"#E8EAF0", lineHeight:1.6 }}>
+        <div style={{ background:`${OR}12`, border:`1px solid ${OR}40`, borderRadius:12, padding:14, marginBottom:24, fontSize:13, color:"#F2ECE4", lineHeight:1.6 }}>
           ⚠️ Modèle à compléter : remplacez les champs entre crochets […] par vos informations réelles, et faites relire ce document par un professionnel avant la mise en ligne.
         </div>
         {d.sections.map((s, i) => (
           <div key={i} style={{ marginBottom:22 }}>
             {s.h && <h3 style={{ fontFamily:"'Syne',sans-serif", fontSize:17, fontWeight:800, color:"#fff", marginBottom:8 }}>{s.h}</h3>}
-            <p style={{ fontSize:14, color:"#C8CAD4", lineHeight:1.8, whiteSpace:"pre-wrap" }}>{s.p}</p>
+            <p style={{ fontSize:14, color:"#D2C9D6", lineHeight:1.8, whiteSpace:"pre-wrap" }}>{s.p}</p>
           </div>
         ))}
-        <p style={{ fontSize:12, color:"#555B6E", marginTop:30 }}>Dernière mise à jour : [à compléter].</p>
+        <p style={{ fontSize:12, color:"#6B6378", marginTop:30 }}>Dernière mise à jour : [à compléter].</p>
       </div>
     </div>
   );
@@ -1294,13 +1417,13 @@ function Renew({ go, user, onLogout }) {
       <Logo size={26} />
       <div style={{ fontSize:52, marginTop:6 }}>⏳</div>
       <h2 style={{ fontFamily:"'Syne',sans-serif", fontSize:24, fontWeight:900, color:"#fff" }}>Activez votre abonnement</h2>
-      <p style={{ fontSize:14, color:"#9CA3AF", lineHeight:1.7 }}>Activez votre abonnement <strong style={{ color:R }}>{plan.name}</strong> pour accéder à votre tableau de bord et recevoir vos commandes.</p>
-      <div style={{ background:"#111420", border:`1px solid ${R}40`, borderRadius:16, padding:"18px 22px", width:"100%" }}>
-        <div style={{ fontFamily:"'Syne',sans-serif", fontSize:34, fontWeight:900, color:"#fff" }}>{plan.price.toFixed(2).replace(".", ",")}€<span style={{ fontSize:13, color:"#6B7280", fontWeight:600 }}>/mois</span></div>
+      <p style={{ fontSize:14, color:"#A89FB0", lineHeight:1.7 }}>Activez votre abonnement <strong style={{ color:R }}>{plan.name}</strong> pour accéder à votre tableau de bord et recevoir vos commandes.</p>
+      <div style={{ background:"#181320", border:`1px solid ${R}40`, borderRadius:16, padding:"18px 22px", width:"100%" }}>
+        <div style={{ fontFamily:"'Syne',sans-serif", fontSize:34, fontWeight:900, color:"#fff" }}>{plan.price.toFixed(2).replace(".", ",")}€<span style={{ fontSize:13, color:"#8A8295", fontWeight:600 }}>/mois</span></div>
       </div>
       <button type="button" onClick={payerAbonnement} style={{ width:"100%", padding:"15px", borderRadius:12, background:R, color:"#fff", fontWeight:800, fontSize:15, border:"none", cursor:"pointer", fontFamily:"inherit" }}>💳 Payer avec SumUp</button>
-      <p style={{ fontSize:12, color:"#555B6E", lineHeight:1.6 }}>Après votre paiement, votre accès est activé automatiquement. En cas de souci, contactez-nous.</p>
-      <button type="button" onClick={onLogout} style={{ background:"none", border:"none", color:"#6B7280", fontSize:13, cursor:"pointer", textDecoration:"underline", fontFamily:"inherit" }}>Se déconnecter</button>
+      <p style={{ fontSize:12, color:"#6B6378", lineHeight:1.6 }}>Après votre paiement, votre accès est activé automatiquement. En cas de souci, contactez-nous.</p>
+      <button type="button" onClick={onLogout} style={{ background:"none", border:"none", color:"#8A8295", fontSize:13, cursor:"pointer", textDecoration:"underline", fontFamily:"inherit" }}>Se déconnecter</button>
     </div>
   );
 }
@@ -1317,41 +1440,41 @@ function PrimaryBtn({ children, onClick, lg, sm, full, type = "button", style:st
 }
 function GhostBtn({ children, onClick, lg, sm, full, type = "button" }) {
   const [hov, setHov] = useState(false);
-  return (<button type={type} onClick={onClick} onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)} style={{ padding: lg ? "15px 28px" : sm ? "8px 16px" : "11px 22px", borderRadius:12, background: hov ? "rgba(255,255,255,.05)" : "transparent", color: hov ? "#fff" : "#E8EAF0", border:`1.5px solid ${hov ? "#888" : "#252836"}`, fontFamily:"'DM Sans',sans-serif", fontSize: lg ? 15 : sm ? 12 : 14, fontWeight:700, cursor:"pointer", width: full ? "100%" : "auto", display:"inline-flex", alignItems:"center", justifyContent:"center", gap:6 }}>{children}</button>);
+  return (<button type={type} onClick={onClick} onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)} style={{ padding: lg ? "15px 28px" : sm ? "8px 16px" : "11px 22px", borderRadius:12, background: hov ? "rgba(255,255,255,.05)" : "transparent", color: hov ? "#fff" : "#F2ECE4", border:`1.5px solid ${hov ? "#888" : "#34293F"}`, fontFamily:"'DM Sans',sans-serif", fontSize: lg ? 15 : sm ? 12 : 14, fontWeight:700, cursor:"pointer", width: full ? "100%" : "auto", display:"inline-flex", alignItems:"center", justifyContent:"center", gap:6 }}>{children}</button>);
 }
 function AdminBtn({ children, onClick, color = R }) {
   return (<button type="button" onClick={onClick} style={{ padding:"6px 11px", borderRadius:8, background:`${color}18`, border:`1px solid ${color}40`, color, fontSize:10, fontWeight:700, cursor:"pointer", fontFamily:"inherit" }}>{children}</button>);
 }
 function StepNav({ title, onBack, step, of }) {
-  return (<div style={{ background:"#111420", borderBottom:"1px solid #181824", padding:"14px 16px", display:"flex", alignItems:"center", gap:12, position:"sticky", top:0, zIndex:20 }}><button type="button" onClick={onBack} style={{ background:"#181824", border:"none", color:"#E8EAF0", width:36, height:36, borderRadius:10, cursor:"pointer", fontSize:18, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>←</button><div style={{ flex:1 }}><div style={{ fontWeight:800, fontSize:15, color:"#E8EAF0" }}>{title}</div><div style={{ fontSize:11, color:"#6B7280", marginTop:1 }}>Étape {step} sur {of}</div></div><div style={{ display:"flex", gap:5 }}>{Array.from({ length:of }, (_, i) => (<div key={i} style={{ height:7, borderRadius:4, background: i < step ? R : "#252836", width: i < step ? 22 : 7 }} />))}</div></div>);
+  return (<div style={{ background:"#181320", borderBottom:"1px solid #241D2F", padding:"14px 16px", display:"flex", alignItems:"center", gap:12, position:"sticky", top:0, zIndex:20 }}><button type="button" onClick={onBack} style={{ background:"#241D2F", border:"none", color:"#F2ECE4", width:36, height:36, borderRadius:10, cursor:"pointer", fontSize:18, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>←</button><div style={{ flex:1 }}><div style={{ fontWeight:800, fontSize:15, color:"#F2ECE4" }}>{title}</div><div style={{ fontSize:11, color:"#8A8295", marginTop:1 }}>Étape {step} sur {of}</div></div><div style={{ display:"flex", gap:5 }}>{Array.from({ length:of }, (_, i) => (<div key={i} style={{ height:7, borderRadius:4, background: i < step ? R : "#34293F", width: i < step ? 22 : 7 }} />))}</div></div>);
 }
 function TopBar({ title, sub, onBack, dot, badge }) {
-  return (<div style={{ padding:"13px 16px", background:"#111420", borderBottom:"1px solid #181824", display:"flex", alignItems:"center", gap:12, position:"sticky", top:0, zIndex:10 }}><button type="button" onClick={onBack} style={{ background:"#181824", border:"none", color:"#E8EAF0", width:36, height:36, borderRadius:10, cursor:"pointer", fontSize:18, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>←</button><div style={{ flex:1 }}><div style={{ fontWeight:800, fontSize:15, display:"flex", alignItems:"center", gap:8, color:"#E8EAF0" }}>{title}{badge > 0 && <span style={{ background:R, color:"#fff", borderRadius:20, padding:"1px 9px", fontSize:11, fontWeight:800 }}>{badge}</span>}</div>{sub && (<div style={{ fontSize:12, color:"#6B7280", marginTop:1, display:"flex", alignItems:"center", gap:5 }}>{dot && <span style={{ width:7, height:7, borderRadius:"50%", background:dot, display:"inline-block" }} />}{sub}</div>)}</div><Logo size={15} /></div>);
+  return (<div style={{ padding:"13px 16px", background:"#181320", borderBottom:"1px solid #241D2F", display:"flex", alignItems:"center", gap:12, position:"sticky", top:0, zIndex:10 }}><button type="button" onClick={onBack} style={{ background:"#241D2F", border:"none", color:"#F2ECE4", width:36, height:36, borderRadius:10, cursor:"pointer", fontSize:18, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>←</button><div style={{ flex:1 }}><div style={{ fontWeight:800, fontSize:15, display:"flex", alignItems:"center", gap:8, color:"#F2ECE4" }}>{title}{badge > 0 && <span style={{ background:R, color:"#fff", borderRadius:20, padding:"1px 9px", fontSize:11, fontWeight:800 }}>{badge}</span>}</div>{sub && (<div style={{ fontSize:12, color:"#8A8295", marginTop:1, display:"flex", alignItems:"center", gap:5 }}>{dot && <span style={{ width:7, height:7, borderRadius:"50%", background:dot, display:"inline-block" }} />}{sub}</div>)}</div><Logo size={15} /></div>);
 }
 function Section({ children, dark }) {
-  return (<section style={{ padding:"72px 5vw", background: dark ? "#0D0E16" : "#09090F", borderTop:"1px solid #181824", borderBottom:"1px solid #181824" }}>{children}</section>);
+  return (<section style={{ padding:"72px 5vw", background: dark ? "#100C16" : "#0B0910", borderTop:"1px solid #241D2F", borderBottom:"1px solid #241D2F" }}>{children}</section>);
 }
 function SectionHead({ pill, title }) {
   return (<div style={{ textAlign:"center", marginBottom:48 }}><div style={{ fontSize:11, fontWeight:700, color:R, letterSpacing:"1.5px", textTransform:"uppercase", marginBottom:12 }}>{pill}</div><h2 style={{ fontFamily:"'Syne',sans-serif", fontSize:"clamp(22px,3.5vw,40px)", fontWeight:900, letterSpacing:"-1px", color:"#fff", whiteSpace:"pre-line" }}>{title}</h2></div>);
 }
 function HoverCard({ children, subtle }) {
   const [hov, setHov] = useState(false);
-  return (<div style={{ background: subtle ? "#111420" : "#0E0F17", border:`1px solid ${hov ? R+"50" : "#181824"}`, borderRadius:18, padding:22, transform: hov ? "translateY(-4px)" : "none", cursor:"default" }} onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}>{children}</div>);
+  return (<div style={{ background: subtle ? "#181320" : "#130F1A", border:`1px solid ${hov ? R+"50" : "#241D2F"}`, borderRadius:18, padding:22, transform: hov ? "translateY(-4px)" : "none", cursor:"default" }} onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}>{children}</div>);
 }
 function Card({ children, id }) {
-  return <div id={id} style={{ background:"#111420", border:"1px solid #181824", borderRadius:16, padding:18, display:"flex", flexDirection:"column", gap:14 }}>{children}</div>;
+  return <div id={id} style={{ background:"#181320", border:"1px solid #241D2F", borderRadius:16, padding:18, display:"flex", flexDirection:"column", gap:14 }}>{children}</div>;
 }
 function Field({ l, children }) {
-  return (<div style={{ display:"flex", flexDirection:"column", gap:6 }}><label style={{ fontSize:11, fontWeight:700, color:"#6B7280", textTransform:"uppercase", letterSpacing:".9px" }}>{l}</label>{children}</div>);
+  return (<div style={{ display:"flex", flexDirection:"column", gap:6 }}><label style={{ fontSize:11, fontWeight:700, color:"#8A8295", textTransform:"uppercase", letterSpacing:".9px" }}>{l}</label>{children}</div>);
 }
 function STitle({ children }) {
-  return <div style={{ fontSize:18, fontWeight:800, color:"#E8EAF0", letterSpacing:"-0.3px" }}>{children}</div>;
+  return <div style={{ fontSize:18, fontWeight:800, color:"#F2ECE4", letterSpacing:"-0.3px" }}>{children}</div>;
 }
 function Toggle({ label, sub, value, onChange, accent = V }) {
-  return (<div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:12 }}><div><div style={{ fontSize:14, fontWeight:600, color:"#E8EAF0" }}>{label}</div>{sub && <div style={{ fontSize:12, color:"#6B7280", marginTop:2 }}>{sub}</div>}</div><div onClick={() => onChange && onChange(!value)} style={{ width:44, height:24, borderRadius:12, background: value ? accent : "#252836", position:"relative", cursor:"pointer", flexShrink:0 }}><div style={{ position:"absolute", top:3, left: value ? 22 : 3, width:18, height:18, borderRadius:"50%", background:"#fff", transition:"left .2s" }} /></div></div>);
+  return (<div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:12 }}><div><div style={{ fontSize:14, fontWeight:600, color:"#F2ECE4" }}>{label}</div>{sub && <div style={{ fontSize:12, color:"#8A8295", marginTop:2 }}>{sub}</div>}</div><div onClick={() => onChange && onChange(!value)} style={{ width:44, height:24, borderRadius:12, background: value ? accent : "#34293F", position:"relative", cursor:"pointer", flexShrink:0 }}><div style={{ position:"absolute", top:3, left: value ? 22 : 3, width:18, height:18, borderRadius:"50%", background:"#fff", transition:"left .2s" }} /></div></div>);
 }
 function ToggleSwitch({ value, onChange, accent = V }) {
-  return (<div onClick={() => onChange(!value)} style={{ width:40, height:22, borderRadius:11, background: value ? accent : "#252836", position:"relative", cursor:"pointer", flexShrink:0 }}><div style={{ position:"absolute", top:2, left: value ? 19 : 2, width:18, height:18, borderRadius:"50%", background:"#fff", transition:"left .2s" }} /></div>);
+  return (<div onClick={() => onChange(!value)} style={{ width:40, height:22, borderRadius:11, background: value ? accent : "#34293F", position:"relative", cursor:"pointer", flexShrink:0 }}><div style={{ position:"absolute", top:2, left: value ? 19 : 2, width:18, height:18, borderRadius:"50%", background:"#fff", transition:"left .2s" }} /></div>);
 }
 function SaveBtn({ saved, onClick, accent = R }) {
   return (<button type="button" onClick={onClick} style={{ padding:"15px", borderRadius:14, background: saved ? V : accent, color:"#fff", border:"none", fontWeight:800, fontSize:15, cursor:"pointer", fontFamily:"inherit" }}>{saved ? "✓ Sauvegardé !" : "Sauvegarder les modifications"}</button>);
