@@ -1432,7 +1432,7 @@ function Dashboard({ go, orders, user }) {
   return (
     <div style={{ minHeight:"100vh", display:"flex", flexDirection:"column", maxWidth:"100%", margin:"0 auto" }}>
       <TopBar title="Commandes en cours" onBack={() => go("admin")} badge={nb} />
-      {flash && (<div className="fu" style={{ background:`${V}18`, borderBottom:`1px solid ${V}55`, padding:"10px 16px", textAlign:"center", fontSize:14, fontWeight:800, color:V }}>🔔 Nouvelle commande reçue !</div>)}
+      {flash && (<div className="fu" style={{ background:`linear-gradient(90deg, ${V}10, ${V}26, ${V}10)`, borderBottom:`1px solid ${V}66`, padding:"13px 16px", textAlign:"center", fontSize:16, fontWeight:800, color:V, letterSpacing:".3px", boxShadow:`0 6px 24px -8px ${V}55` }}><span style={{ animation: RM?"none":"bob 1s ease-in-out infinite", display:"inline-block" }}>🔔</span> Nouvelle commande reçue !</div>)}
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:8, padding:"8px 14px", background:"#0B0910", borderBottom:"1px solid #241D2F", flexWrap:"wrap" }}>
         <span style={{ fontSize:11, color:"#8A8295", display:"flex", alignItems:"center", gap:6 }}><span style={{ width:7, height:7, borderRadius:"50%", background:V, display:"inline-block", animation:"blink 1.6s infinite" }} />En direct</span>
         <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
@@ -1446,8 +1446,8 @@ function Dashboard({ go, orders, user }) {
       <div style={{ display:"flex", background:"#0B0910", borderBottom:"1px solid #241D2F", padding:"0 12px" }}>
         {[{ k:"en_cours", l:"⏳ En cours" }, { k:"pret", l:"✅ Prêt" }, { k:"all", l:"📋 Tout" }].map(t => (<button key={t.k} type="button" onClick={() => setFilter(t.k)} style={{ flex:1, padding:"12px 4px", background:"none", border:"none", borderBottom: filter === t.k ? `2px solid ${R}` : "2px solid transparent", color: filter === t.k ? R : "#8A8295", fontSize:13, fontWeight:700, cursor:"pointer", fontFamily:"inherit" }}>{t.l}</button>))}
       </div>
-      <div style={{ flex:1, overflowY:"auto", padding:16, display:"flex", flexDirection:"column", gap:14 }}>
-        {list.length === 0 && (<div style={{ textAlign:"center", color:"#6B6378", marginTop:60 }}><div style={{ fontSize:44, marginBottom:14 }}>🍽️</div><div style={{ fontSize:15 }}>Aucune commande ici pour le moment.</div></div>)}
+      <div style={{ flex:1, overflowY:"auto", padding:18, display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(320px, 1fr))", gap:16, alignContent:"start" }}>
+        {list.length === 0 && (<div style={{ gridColumn:"1/-1", textAlign:"center", color:FAINT, marginTop:70 }}><div style={{ fontSize:52, marginBottom:16, animation: RM?"none":"floaty 5s ease-in-out infinite" }}>🍽️</div><div style={{ fontSize:16 }}>Aucune commande ici pour le moment.</div><div style={{ fontSize:13, color:MUT, marginTop:6 }}>Les nouvelles commandes apparaîtront ici en temps réel.</div></div>)}
         {list.map((o, i) => <OrderCard key={o.id} o={o} i={i} />)}
       </div>
     </div>
@@ -1460,20 +1460,20 @@ function OrderCard({ o, i }) {
   const isPret = status === "pret";
   const isCmd = o.type === "commande";
   return (
-    <div className="fu" style={{ background:"#181320", border:`1.5px solid ${isPret ? V+"55" : isCmd ? R+"45" : "#3B82F645"}`, borderRadius:18, overflow:"hidden" }}>
-      <div style={{ background: isPret ? `${V}15` : isCmd ? `${R}10` : "#3B82F610", padding:"12px 16px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-        <div style={{ display:"flex", alignItems:"center", gap:10 }}><span style={{ fontSize:22 }}>{isCmd ? "🍔" : "📅"}</span><div><div style={{ fontWeight:800, fontSize:15, color:"#F2ECE4" }}>{o.id}</div><div style={{ fontSize:12, color:"#8A8295", marginTop:1 }}>{o.client} · {o.time}</div></div></div>
-        <div style={{ fontSize:11, fontWeight:700, padding:"4px 12px", borderRadius:20, background: isPret ? `${V}25` : "#8A829522", border:`1px solid ${isPret ? V+"55" : "#8A829550"}`, color: isPret ? V : "#A89FB0" }}>{isPret ? "✓ Prêt" : "En cours"}</div>
+    <div className="fu" style={{ background:PANEL, border:`1.5px solid ${isPret ? V+"66" : isCmd ? R+"55" : "#3B82F655"}`, borderRadius:20, overflow:"hidden", boxShadow: isPret ? `0 0 0 1px ${V}22, 0 14px 34px -22px ${V}66` : `0 14px 34px -24px #000`, height:"100%", display:"flex", flexDirection:"column" }}>
+      <div style={{ background: isPret ? `${V}1A` : isCmd ? `${R}14` : "#3B82F614", padding:"14px 18px", display:"flex", alignItems:"center", justifyContent:"space-between", borderBottom:`1px solid ${LINE}` }}>
+        <div style={{ display:"flex", alignItems:"center", gap:12 }}><span style={{ fontSize:26 }}>{isCmd ? "🍔" : "📅"}</span><div><div style={{ fontFamily:"'Space Mono',monospace", fontWeight:700, fontSize:18, color:"#fff", letterSpacing:"-.5px" }}>{o.id}</div><div style={{ fontSize:12, color:MUT, marginTop:2 }}>{o.client} · {o.time}</div></div></div>
+        <div style={{ fontSize:11, fontWeight:800, padding:"5px 13px", borderRadius:20, background: isPret ? `${V}28` : `${R}1A`, border:`1px solid ${isPret ? V+"66" : R+"45"}`, color: isPret ? V : R, textTransform:"uppercase", letterSpacing:.5 }}>{isPret ? "✓ Prêt" : "En cours"}</div>
       </div>
-      <div style={{ padding:"12px 16px", display:"flex", flexDirection:"column", gap:6 }}>
-        {o.items.map((it, j) => (<div key={j} style={{ display:"flex", alignItems:"center", gap:8, fontSize:14, color:"#D2C9D6" }}><span style={{ color:R, fontSize:11 }}>▸</span>{it}</div>))}
-        {o.note && <div style={{ marginTop:6, fontSize:12, color:"#8A8295", background:"#241D2F", borderRadius:8, padding:"6px 10px" }}>📝 {o.note}</div>}
+      <div style={{ padding:"14px 18px", display:"flex", flexDirection:"column", gap:8, flex:1 }}>
+        {o.items.map((it, j) => (<div key={j} style={{ display:"flex", alignItems:"center", gap:10, fontSize:16, fontWeight:600, color:TXT, lineHeight:1.35 }}><span style={{ color:R, fontSize:13, flexShrink:0 }}>▸</span>{it}</div>))}
+        {o.note && <div style={{ marginTop:6, fontSize:13, color:OR, background:`${OR}12`, border:`1px solid ${OR}30`, borderRadius:10, padding:"8px 12px" }}>📝 {o.note}</div>}
       </div>
-      <div style={{ padding:"10px 16px 16px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-        <div style={{ fontWeight:800, fontSize:18, color:OR }}>{o.total}</div>
+      <div style={{ padding:"12px 18px 18px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:10, borderTop:`1px solid ${LINE}` }}>
+        <div style={{ fontFamily:"'Syne',sans-serif", fontWeight:800, fontSize:24, color:OR }}>{o.total}</div>
         <div style={{ display:"flex", gap:8 }}>
-          {!isPret && status !== "termine" && (<button type="button" onClick={() => upd("pret")} style={{ padding:"9px 20px", borderRadius:10, background:V, color:"#fff", border:"none", fontWeight:800, fontSize:13, cursor:"pointer", fontFamily:"inherit" }}>✓ Marquer prêt</button>)}
-          {isPret && (<button type="button" onClick={() => upd("termine")} style={{ padding:"9px 20px", borderRadius:10, background:"#241D2F", color:"#A89FB0", border:"1px solid #34293F", fontWeight:700, fontSize:13, cursor:"pointer", fontFamily:"inherit" }}>Terminer</button>)}
+          {!isPret && status !== "termine" && (<button type="button" onClick={() => upd("pret")} style={{ padding:"11px 22px", borderRadius:12, background:V, color:"#0B0910", border:"none", fontWeight:800, fontSize:14, cursor:"pointer", fontFamily:"inherit", boxShadow:`0 8px 20px -10px ${V}aa` }}>✓ Marquer prêt</button>)}
+          {isPret && (<button type="button" onClick={() => upd("termine")} style={{ padding:"11px 22px", borderRadius:12, background:LINE, color:MUT, border:`1px solid ${LINE2}`, fontWeight:700, fontSize:14, cursor:"pointer", fontFamily:"inherit" }}>Terminer</button>)}
         </div>
       </div>
     </div>
