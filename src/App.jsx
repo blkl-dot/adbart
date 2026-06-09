@@ -162,7 +162,7 @@ const now = () => new Date().toLocaleTimeString("fr-FR", { hour:"2-digit", minut
 
 // ── CSS global ────────────────────────────────────────────────────────
 const CSS = `
-@import url('https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=DM+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800;900&family=DM+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap');
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html { scroll-behavior: smooth; }
 body { font-family: 'DM Sans', sans-serif; background: ${BG}; color: ${TXT}; overflow-x: hidden; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
@@ -441,69 +441,187 @@ function Reset({ go, onLogged }) {
 // ═════════════════════════════════════════════════════════════════════
 // LANDING
 // ═════════════════════════════════════════════════════════════════════
-function Landing({ go }) {
+// Le moment signature : un téléphone qui RACONTE le produit, de l'appel
+// manqué jusqu'au ticket qui tombe en cuisine. Boucle douce ; sous
+// prefers-reduced-motion, on fige sur l'étape « cuisine » (la promesse).
+function HeroScene() {
+  const [step, setStep] = useState(RM ? 4 : 0); // 0 sonne · 1 manqué · 2 sms · 3 commande · 4 cuisine
+  useEffect(() => {
+    if (RM) return;
+    const durs = [2000, 1300, 2300, 2400, 2700];
+    let i = 0, t;
+    const run = () => { t = setTimeout(() => { i = (i + 1) % 5; setStep(i); run(); }, durs[i]); };
+    run();
+    return () => clearTimeout(t);
+  }, []);
+  const STAGES = ["Il appelle", "Manqué", "SMS + lien", "Il commande", "En cuisine"];
+  const accent = step === 4 ? V : step === 1 ? "#EF4444" : R;
+  const bubble = (bg, br, extra = {}) => ({ background:bg, border:br, borderRadius:14, padding:"11px 13px", fontSize:12.5, lineHeight:1.6, color:TXT, ...extra });
   return (
-    <div>
-      <nav style={{ position:"sticky", top:0, zIndex:100, height:62, display:"flex", alignItems:"center", justifyContent:"space-between", padding:"0 5vw", background:"rgba(9,9,15,.94)", backdropFilter:"blur(20px)", borderBottom:"1px solid #241D2F" }}>
+    <div style={{ position:"relative", width:"100%", maxWidth:340, margin:"0 auto" }}>
+      {/* halos d'ambiance */}
+      <div style={{ position:"absolute", inset:"-12% -18%", background:`radial-gradient(circle at 50% 40%, ${accent}26, transparent 62%)`, filter:"blur(8px)", transition:`background .6s ${EASE}`, pointerEvents:"none" }} />
+      {/* téléphone */}
+      <div style={{ position:"relative", aspectRatio:"9/18.6", maxHeight:560, background:`linear-gradient(160deg, #1C1626, #120E18)`, borderRadius:38, border:`2px solid ${accent}`, boxShadow:`0 30px 80px -20px ${accent}55, 0 0 0 1px #ffffff08 inset`, padding:13, transition:`border-color .6s ${EASE}, box-shadow .6s ${EASE}`, animation: RM ? "none" : "floaty 6s ease-in-out infinite" }}>
+        <div style={{ position:"absolute", top:14, left:"50%", transform:"translateX(-50%)", width:74, height:18, background:"#0A0710", borderRadius:12, zIndex:3 }} />
+        <div style={{ position:"relative", width:"100%", height:"100%", background:BG, borderRadius:27, overflow:"hidden", display:"flex", flexDirection:"column" }}>
+          {/* barre d'état */}
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"9px 18px 4px", fontSize:10, fontWeight:700, color:MUT }}>
+            <span style={{ fontFamily:"'Space Mono',monospace" }}>20:47</span>
+            <span style={{ display:"flex", gap:4, alignItems:"center" }}><span>📶</span><span>🔋</span></span>
+          </div>
+          <div key={step} className="fu" style={{ flex:1, display:"flex", flexDirection:"column", justifyContent:"center", padding:"6px 16px 16px" }}>
+            {step === 0 && (
+              <div style={{ textAlign:"center" }}>
+                <div style={{ position:"relative", width:96, height:96, margin:"0 auto 18px" }}>
+                  {!RM && [0,1].map(k => <span key={k} style={{ position:"absolute", inset:0, borderRadius:"50%", border:`2px solid ${R}`, animation:`ripple 1.8s ${EASE} ${k*0.9}s infinite` }} />)}
+                  <div style={{ position:"absolute", inset:0, borderRadius:"50%", background:`linear-gradient(135deg,${R},${OR})`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:40 }}>📞</div>
+                </div>
+                <div style={{ fontSize:11, color:MUT, letterSpacing:1, textTransform:"uppercase", fontWeight:700 }}>Appel entrant</div>
+                <div style={{ fontFamily:"'Syne',sans-serif", fontSize:20, fontWeight:800, color:"#fff", marginTop:4 }}>Client</div>
+                <div style={{ fontFamily:"'Space Mono',monospace", fontSize:13, color:MUT, marginTop:2 }}>06 12 •• •• 38</div>
+                <div style={{ display:"flex", justifyContent:"center", gap:22, marginTop:24 }}>
+                  <div style={{ width:46, height:46, borderRadius:"50%", background:"#EF4444", display:"flex", alignItems:"center", justifyContent:"center", fontSize:20 }}>📵</div>
+                  <div style={{ width:46, height:46, borderRadius:"50%", background:V, display:"flex", alignItems:"center", justifyContent:"center", fontSize:20 }}>📞</div>
+                </div>
+                <div style={{ fontSize:11, color:FAINT, marginTop:18, fontStyle:"italic" }}>…vous êtes en plein coup de feu 🔥</div>
+              </div>
+            )}
+            {step === 1 && (
+              <div style={{ textAlign:"center" }}>
+                <div style={{ fontSize:54, marginBottom:14 }}>📵</div>
+                <div style={{ display:"inline-block", background:"#EF444418", border:"1px solid #EF444455", color:"#EF4444", borderRadius:100, padding:"5px 16px", fontSize:13, fontWeight:800 }}>Appel manqué</div>
+                <div style={{ fontSize:12, color:MUT, marginTop:18, lineHeight:1.6 }}>Sans AdBarth, ce client<br/>serait déjà ailleurs.</div>
+                <div style={{ marginTop:16, fontSize:11, color:V, fontWeight:700 }}>Mais AdBarth veille ⚡</div>
+              </div>
+            )}
+            {step === 2 && (
+              <div>
+                <div style={{ fontSize:10, fontWeight:800, color:R, letterSpacing:1.4, textTransform:"uppercase", marginBottom:12, display:"flex", alignItems:"center", gap:6 }}><span>💬</span> SMS · à l'instant</div>
+                <div style={bubble(`linear-gradient(160deg, ${PANEL}, #1d1626)`, `1px solid ${R}45`, { borderRadius:"4px 16px 16px 16px" })}>
+                  Bonjour 👋 Désolés de n'avoir pas pu répondre&nbsp;! Commandez ou réservez en ligne ici&nbsp;:
+                  <div style={{ marginTop:8, fontFamily:"'Space Mono',monospace", fontSize:11.5, color:R, fontWeight:700, textDecoration:"underline", wordBreak:"break-all" }}>adbarth.fr/le-bistrot ↗</div>
+                </div>
+                <div style={{ display:"flex", justifyContent:"center", marginTop:18 }}>
+                  <div style={{ fontSize:11, color:V, fontWeight:700, display:"inline-flex", alignItems:"center", gap:6 }}><span style={{ width:6, height:6, borderRadius:"50%", background:V, animation: RM?"none":"blink 1.2s infinite" }} /> Envoyé en 3 secondes</div>
+                </div>
+              </div>
+            )}
+            {step === 3 && (
+              <div style={{ display:"flex", flexDirection:"column", gap:9 }}>
+                <div style={{ fontSize:10, fontWeight:800, color:R, letterSpacing:1.4, textTransform:"uppercase", display:"flex", alignItems:"center", gap:6 }}><span>🤖</span> Le Bistrot · Chatbot</div>
+                <div style={bubble(PANEL, `1px solid ${LINE}`, { borderRadius:"4px 14px 14px 14px", alignSelf:"flex-start", maxWidth:"86%" })}>Que puis-je pour vous ce soir&nbsp;?</div>
+                <div style={bubble(R, "none", { borderRadius:"14px 4px 14px 14px", alignSelf:"flex-end", color:"#fff", fontWeight:600 })}>Un burger + une boisson 🍔</div>
+                <div style={{ background:BG2, border:`1px solid ${R}40`, borderRadius:12, padding:"10px 12px" }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, color:TXT, marginBottom:5 }}><span>🍔 Burger maison ×1</span><span style={{ color:OR, fontWeight:700 }}>13,50€</span></div>
+                  <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, color:TXT, marginBottom:8 }}><span>🥤 Boisson ×1</span><span style={{ color:OR, fontWeight:700 }}>3,30€</span></div>
+                  <div style={{ borderTop:`1px solid ${LINE}`, paddingTop:7, display:"flex", justifyContent:"space-between", fontWeight:800, fontSize:13 }}><span>Total</span><span style={{ color:OR }}>16,80€</span></div>
+                </div>
+                <div style={{ textAlign:"center", fontSize:11, color:V, fontWeight:800, marginTop:2 }}>✓ Commande envoyée</div>
+              </div>
+            )}
+            {step === 4 && (
+              <div style={{ display:"flex", flexDirection:"column", height:"100%", justifyContent:"center" }}>
+                <div style={{ fontSize:10, fontWeight:800, color:V, letterSpacing:1.4, textTransform:"uppercase", marginBottom:12, display:"flex", alignItems:"center", gap:6, justifyContent:"center" }}><span>🍽️</span> Écran cuisine</div>
+                <div style={{ background:`linear-gradient(160deg, ${PANEL}, #141a18)`, border:`1.5px solid ${V}66`, borderRadius:16, padding:14, boxShadow:`0 0 30px ${V}30`, animation: RM ? "none" : "dropIn .7s "+EASE+" both" }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+                    <span style={{ fontFamily:"'Space Mono',monospace", fontWeight:700, fontSize:14, color:"#fff" }}>CMD-4821</span>
+                    <span style={{ fontSize:10, fontWeight:800, color:V, background:`${V}22`, border:`1px solid ${V}55`, borderRadius:20, padding:"2px 9px" }}>NOUVEAU</span>
+                  </div>
+                  <div style={{ display:"flex", flexDirection:"column", gap:5, fontSize:12.5, color:"#D2C9D6" }}>
+                    <div>▸ 1× Burger maison</div>
+                    <div>▸ 1× Boisson</div>
+                  </div>
+                  <div style={{ borderTop:`1px solid ${LINE}`, marginTop:10, paddingTop:8, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                    <span style={{ fontWeight:800, color:OR, fontSize:15 }}>16,80€</span>
+                    <span style={{ fontSize:11, color:MUT }}>à l'instant</span>
+                  </div>
+                </div>
+                <div style={{ textAlign:"center", fontSize:12, fontWeight:800, color:V, marginTop:14, display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}><span style={{ animation: RM?"none":"bob 1s ease-in-out infinite" }}>🔔</span> Nouvelle commande reçue</div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+      {/* fil d'étapes sous le téléphone */}
+      <div style={{ display:"flex", justifyContent:"center", gap:5, marginTop:18, flexWrap:"wrap" }}>
+        {STAGES.map((s, i) => (
+          <span key={i} style={{ fontSize:10, fontWeight:700, padding:"4px 9px", borderRadius:20, color: i === step ? "#fff" : FAINT, background: i === step ? accent : "transparent", border:`1px solid ${i === step ? accent : LINE}`, transition:`all .4s ${EASE}` }}>{s}</span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Compteur animé pour les stats ("85%", "+34%", "3s"…)
+function StatCounter({ raw, label }) {
+  const m = String(raw).match(/^([^\d-]*)(-?\d+(?:[.,]\d+)?)(.*)$/);
+  const prefix = m ? m[1] : "", num = m ? parseFloat(m[2].replace(",", ".")) : 0, suffix = m ? m[3] : "";
+  const [val, ref] = useCountUp(num, 1500);
+  return (
+    <div style={{ flex:1, minWidth:140, padding:"30px 16px", textAlign:"center", borderRight:"1px solid "+LINE }}>
+      <div ref={ref} style={{ fontFamily:"'Syne',sans-serif", fontSize:"clamp(30px,4.6vw,46px)", fontWeight:800, lineHeight:1, marginBottom:8 }} className="grad-text">{prefix}{Math.round(val)}{suffix}</div>
+      <div style={{ fontSize:12.5, color:MUT, fontWeight:500, lineHeight:1.45 }}>{label}</div>
+    </div>
+  );
+}
+
+function Landing({ go }) {
+  const [scrolled, setScrolled] = useState(false);
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 30);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+  return (
+    <div className="grain">
+      <nav className="glass" style={{ position:"sticky", top:0, zIndex:100, height:scrolled ? 56 : 66, display:"flex", alignItems:"center", justifyContent:"space-between", padding:"0 5vw", borderBottom:`1px solid ${scrolled ? LINE : "transparent"}`, transition:`all .35s ${EASE}` }}>
         <Logo />
         <div style={{ display:"flex", gap:10 }}>
           <GhostBtn sm onClick={() => go("login")}>Se connecter</GhostBtn>
           <PrimaryBtn sm onClick={() => go("pricing")}>Commencer →</PrimaryBtn>
         </div>
       </nav>
-      <section style={{ minHeight:"92vh", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"90px 20px 70px", textAlign:"center", position:"relative", overflow:"hidden" }}>
-        <div style={{ position:"absolute", inset:0, background:`radial-gradient(ellipse 80% 55% at 50% -5%, ${R}1C 0%, transparent 65%)`, pointerEvents:"none" }} />
-        <div style={{ position:"absolute", inset:0, opacity:.12, backgroundImage:`linear-gradient(#2A2238 1px,transparent 1px),linear-gradient(90deg,#2A2238 1px,transparent 1px)`, backgroundSize:"54px 54px", maskImage:"radial-gradient(ellipse 72% 62% at 50% 50%,black,transparent)" }} />
-        <div className="fu" style={{ display:"inline-flex", alignItems:"center", gap:8, background:`${R}18`, border:`1px solid ${R}45`, borderRadius:100, padding:"6px 18px", fontSize:11, fontWeight:700, color:R, letterSpacing:"1.3px", textTransform:"uppercase", marginBottom:28 }}>
-          <span style={{ width:7, height:7, borderRadius:"50%", background:R, animation:"blink 1.4s infinite" }} />
-          Nouveau · Spécial Restaurants
-        </div>
-        <h1 className="fu" style={{ fontFamily:"'Syne',sans-serif", fontSize:"clamp(30px,5.5vw,68px)", fontWeight:900, lineHeight:1.05, letterSpacing:"-2px", color:"#fff", maxWidth:760, marginBottom:24, animationDelay:".1s" }}>
-          Pendant que vous cuisinez,<br />
-          <span style={{ color:R }}>vos clients partent ailleurs.</span>
-        </h1>
-        <p className="fu" style={{ fontSize:"clamp(14px,1.8vw,18px)", color:"#8A8295", maxWidth:500, lineHeight:1.75, marginBottom:40, animationDelay:".2s" }}>
-          AdBarth envoie un SMS automatique à chaque appel manqué. Le client clique sur le lien, commande ou réserve — et la commande arrive directement en cuisine.
-        </p>
-        <div className="fu" style={{ display:"flex", gap:12, flexWrap:"wrap", justifyContent:"center", marginBottom:20, animationDelay:".3s" }}>
-          <PrimaryBtn lg onClick={() => go("pricing")}>Récupérer mes appels manqués →</PrimaryBtn>
-          <GhostBtn lg onClick={() => go("simulator")}>📞 Voir la démo</GhostBtn>
-        </div>
-        <p className="fu" style={{ fontSize:13, color:"#6B6378", animationDelay:".4s" }}>
-          <strong style={{ color:"#F2ECE4" }}>À partir de 29,90€/mois</strong> · Sans engagement · Installation en 15 min
-        </p>
-        <p className="fu" style={{ fontSize:13, color:"#A89FB0", animationDelay:".45s", marginTop:14 }}>
-          Déjà un compte ? <span onClick={() => go("login")} style={{ color:R, fontWeight:700, cursor:"pointer" }}>Se connecter →</span>
-        </p>
-        <div className="fu" style={{ display:"flex", alignItems:"center", flexWrap:"wrap", justifyContent:"center", marginTop:60, animationDelay:".5s" }}>
-          {[
-            { i:"📵", l:"Appel manqué" },
-            { i:"💬", l:"SMS + lien" },
-            { i:"🤖", l:"Client commande" },
-            { i:"🍽️", l:"Arrive en cuisine" },
-          ].map((s, idx) => (
-            <div key={idx} style={{ display:"flex", alignItems:"center" }}>
-              <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:8, padding:"14px 20px", background: idx % 2 === 1 ? `${R}12` : "#181320", border:`1px solid ${idx % 2 === 1 ? R+"45" : "#241D2F"}`, borderRadius:14, minWidth:90 }}>
-                <span style={{ fontSize:24 }}>{s.i}</span>
-                <span style={{ fontSize:10, fontWeight:700, color: idx % 2 === 1 ? R : "#8A8295", textAlign:"center", lineHeight:1.3 }}>{s.l}</span>
-              </div>
-              {idx < 3 && <span style={{ color:R, fontSize:16, padding:"0 5px", opacity:.65 }}>→</span>}
+      <section style={{ position:"relative", overflow:"hidden", padding:"clamp(48px,7vw,96px) 5vw clamp(56px,7vw,88px)" }}>
+        <div style={{ position:"absolute", inset:0, background:`radial-gradient(ellipse 70% 50% at 78% 8%, ${R}1E 0%, transparent 60%), radial-gradient(ellipse 60% 50% at 12% 70%, ${V}10 0%, transparent 55%)`, pointerEvents:"none" }} />
+        <div style={{ position:"absolute", inset:0, opacity:.1, backgroundImage:`linear-gradient(${LINE2} 1px,transparent 1px),linear-gradient(90deg,${LINE2} 1px,transparent 1px)`, backgroundSize:"58px 58px", maskImage:"radial-gradient(ellipse 80% 70% at 50% 40%,black,transparent)", pointerEvents:"none" }} />
+        <div style={{ position:"relative", maxWidth:1140, margin:"0 auto", display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(310px,1fr))", gap:"clamp(32px,5vw,60px)", alignItems:"center" }}>
+          {/* colonne texte */}
+          <div style={{ minWidth:0 }}>
+            <div className="fu" style={{ display:"inline-flex", alignItems:"center", gap:8, background:`${R}14`, border:`1px solid ${R}40`, borderRadius:100, padding:"6px 16px", fontSize:11, fontWeight:700, color:R, letterSpacing:"1.2px", textTransform:"uppercase", marginBottom:24 }}>
+              <span style={{ width:7, height:7, borderRadius:"50%", background:R, animation: RM?"none":"blink 1.4s infinite" }} />
+              Pour les restaurants indépendants
             </div>
-          ))}
+            <h1 className="fu" style={{ fontFamily:"'Syne',sans-serif", fontSize:"clamp(38px,7vw,76px)", fontWeight:800, lineHeight:1.02, letterSpacing:"-2.5px", color:"#fff", marginBottom:22, animationDelay:".08s" }}>
+              L'appel que vous ratez,<br />on le transforme en <span className="grad-text">commande.</span>
+            </h1>
+            <p className="fu" style={{ fontSize:"clamp(15px,1.6vw,18px)", color:MUT, maxWidth:480, lineHeight:1.7, marginBottom:34, animationDelay:".18s" }}>
+              Quand vous ne pouvez pas répondre, AdBarth envoie un SMS au client. Il commande ou réserve via un simple lien — et le ticket tombe <strong style={{ color:TXT }}>directement en cuisine</strong>.
+            </p>
+            <div className="fu" style={{ display:"flex", gap:12, flexWrap:"wrap", marginBottom:22, animationDelay:".26s" }}>
+              <PrimaryBtn lg onClick={() => go("pricing")}>Récupérer mes appels manqués →</PrimaryBtn>
+              <GhostBtn lg onClick={() => go("simulator")}>▶ Voir la démo</GhostBtn>
+            </div>
+            <div className="fu" style={{ display:"flex", alignItems:"center", gap:16, flexWrap:"wrap", fontSize:13, color:FAINT, animationDelay:".34s" }}>
+              <span><strong style={{ color:TXT }}>Dès 29,90€/mois</strong></span>
+              <span style={{ color:LINE2 }}>•</span><span>Sans engagement</span>
+              <span style={{ color:LINE2 }}>•</span><span>Prêt en 15 min</span>
+            </div>
+            <p className="fu" style={{ fontSize:13, color:MUT, marginTop:18, animationDelay:".4s" }}>
+              Déjà un compte ? <span onClick={() => go("login")} style={{ color:R, fontWeight:700, cursor:"pointer" }}>Se connecter →</span>
+            </p>
+          </div>
+          {/* colonne scène animée */}
+          <div className="fu" style={{ animationDelay:".22s", minWidth:0 }}><HeroScene /></div>
         </div>
       </section>
-      <div style={{ display:"flex", flexWrap:"wrap", borderTop:"1px solid #241D2F", borderBottom:"1px solid #241D2F" }}>
+      <div style={{ display:"flex", flexWrap:"wrap", borderTop:`1px solid ${LINE}`, borderBottom:`1px solid ${LINE}`, background:BG1 }}>
         {[
           { n:"85%", l:"des clients ne rappellent jamais" },
           { n:"3s", l:"délai d'envoi du SMS" },
           { n:"+34%",l:"de commandes récupérées" },
           { n:"0%", l:"de commission sur vos ventes" },
-        ].map((s, i) => (
-          <div key={i} style={{ flex:1, minWidth:130, padding:"22px 14px", textAlign:"center", borderRight: i < 3 ? "1px solid #241D2F" : "none" }}>
-            <div style={{ fontFamily:"'Syne',sans-serif", fontSize:28, fontWeight:900, color:R, lineHeight:1, marginBottom:6 }}>{s.n}</div>
-            <div style={{ fontSize:12, color:"#8A8295", fontWeight:600, lineHeight:1.4 }}>{s.l}</div>
-          </div>
-        ))}
+        ].map((s, i) => (<StatCounter key={i} raw={s.n} label={s.l} />))}
       </div>
       <Section dark>
         <SectionHead pill="Comment ça marche" title={"4 étapes.\nZéro effort de votre part."} />
@@ -513,13 +631,15 @@ function Landing({ go }) {
             { n:"02", i:"💬", t:"SMS envoyé en 3 secondes", d:`Le client reçoit un SMS avec un lien cliquable : "Nous n'avons pas pu répondre. Cliquez ici pour commander ou réserver 👉 [lien]"` },
             { n:"03", i:"🤖", t:"Le client clique et commande", d:"Le lien ouvre votre chatbot. Le client choisit sur votre menu, réserve une table ou pose une question, en totale autonomie, 24h/24." },
             { n:"04", i:"🍽️", t:"Commande en cuisine", d:"La commande s'affiche instantanément sur votre écran cuisine. Zéro saisie manuelle, zéro appel, zéro erreur." },
-          ].map(s => (
-            <HoverCard key={s.n}>
-              <div style={{ fontFamily:"'Syne',sans-serif", fontSize:36, fontWeight:900, color:`${R}1C`, marginBottom:10, lineHeight:1 }}>{s.n}</div>
-              <div style={{ fontSize:26, marginBottom:10 }}>{s.i}</div>
-              <div style={{ fontSize:14, fontWeight:700, marginBottom:8, color:"#F2ECE4" }}>{s.t}</div>
-              <div style={{ fontSize:13, color:"#8A8295", lineHeight:1.65 }}>{s.d}</div>
-            </HoverCard>
+          ].map((s, i) => (
+            <Reveal key={s.n} delay={i * 80}>
+              <HoverCard>
+                <div style={{ fontFamily:"'Syne',sans-serif", fontSize:38, fontWeight:800, color:`${R}26`, marginBottom:10, lineHeight:1 }}>{s.n}</div>
+                <div style={{ fontSize:28, marginBottom:10 }}>{s.i}</div>
+                <div style={{ fontSize:14.5, fontWeight:700, marginBottom:8, color:TXT }}>{s.t}</div>
+                <div style={{ fontSize:13, color:MUT, lineHeight:1.65 }}>{s.d}</div>
+              </HoverCard>
+            </Reveal>
           ))}
         </div>
       </Section>
@@ -533,22 +653,25 @@ function Landing({ go }) {
             { i:"🍽️", t:"Dashboard cuisine", d:"Commandes et réservations arrivent en temps réel sur votre écran cuisine." },
             { i:"💰", t:"0% de commission", d:"Forfait fixe mensuel. Pas 25-30% prélevés sur chaque commande comme Uber Eats." },
             { i:"🔒", t:"Vos données, vos clients", d:"On ne revend jamais vos contacts. Vos clients restent les vôtres, pas ceux d'une plateforme." },
-          ].map(w => (
-            <HoverCard key={w.t} subtle>
-              <div style={{ width:44, height:44, background:`${R}18`, borderRadius:12, display:"flex", alignItems:"center", justifyContent:"center", fontSize:20, marginBottom:14 }}>{w.i}</div>
-              <div style={{ fontSize:14, fontWeight:700, marginBottom:7, color:"#F2ECE4" }}>{w.t}</div>
-              <div style={{ fontSize:13, color:"#8A8295", lineHeight:1.6 }}>{w.d}</div>
-            </HoverCard>
+          ].map((w, i) => (
+            <Reveal key={w.t} delay={(i % 3) * 80}>
+              <HoverCard subtle>
+                <div style={{ width:46, height:46, background:`linear-gradient(135deg,${R}28,${OR}14)`, border:`1px solid ${R}30`, borderRadius:13, display:"flex", alignItems:"center", justifyContent:"center", fontSize:21, marginBottom:14 }}>{w.i}</div>
+                <div style={{ fontSize:14.5, fontWeight:700, marginBottom:7, color:TXT }}>{w.t}</div>
+                <div style={{ fontSize:13, color:MUT, lineHeight:1.6 }}>{w.d}</div>
+              </HoverCard>
+            </Reveal>
           ))}
         </div>
       </Section>
       <Section dark>
         <SectionHead pill="Comparaison" title={"AdBarth vs plateformes\nde livraison"} />
-        <div style={{ maxWidth:580, margin:"0 auto", background:"#181320", border:"1px solid #241D2F", borderRadius:20, overflow:"hidden" }}>
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", padding:"10px 18px", background:"#130F1A", borderBottom:"1px solid #241D2F" }}>
-            <div style={{ fontSize:11, color:"#6B6378", fontWeight:700, textTransform:"uppercase", letterSpacing:1 }}>Critère</div>
+        <Reveal style={{ maxWidth:600, margin:"0 auto" }}>
+        <div style={{ background:PANEL, border:`1px solid ${LINE}`, borderRadius:22, overflow:"hidden", boxShadow:`0 24px 60px -30px ${R}40` }}>
+          <div style={{ display:"grid", gridTemplateColumns:"1.3fr 1fr 1fr", padding:"12px 18px", background:BG2, borderBottom:`1px solid ${LINE}` }}>
+            <div style={{ fontSize:11, color:FAINT, fontWeight:700, textTransform:"uppercase", letterSpacing:1 }}>Critère</div>
             <div style={{ fontSize:11, color:R, fontWeight:800, textAlign:"center", textTransform:"uppercase", letterSpacing:1 }}>AdBarth</div>
-            <div style={{ fontSize:11, color:"#6B6378", fontWeight:700, textAlign:"center", textTransform:"uppercase", letterSpacing:1 }}>Uber Eats</div>
+            <div style={{ fontSize:11, color:FAINT, fontWeight:700, textAlign:"center", textTransform:"uppercase", letterSpacing:1 }}>Uber Eats</div>
           </div>
           {[
             { l:"Commission par commande", a:"0%", b:"25–30%" },
@@ -558,13 +681,14 @@ function Landing({ go }) {
             { l:"Vos clients restent vôtres", a:"✓",b:"✗" },
             { l:"Coût mensuel", a:"Fixe dès 29,90€", b:"Variable + %" },
           ].map((row, i) => (
-            <div key={row.l} style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", padding:"13px 18px", borderBottom: i < 5 ? "1px solid #241D2F" : "none", background: i % 2 === 1 ? "#130F1A" : "transparent" }}>
+            <div key={row.l} style={{ display:"grid", gridTemplateColumns:"1.3fr 1fr 1fr", alignItems:"center", padding:"14px 18px", borderBottom: i < 5 ? `1px solid ${LINE}` : "none" }}>
               <div style={{ fontSize:13, color:"#A89FB0" }}>{row.l}</div>
-              <div style={{ fontSize:13, fontWeight:800, color:V, textAlign:"center" }}>{row.a}</div>
-              <div style={{ fontSize:13, fontWeight:600, color:"#EF4444", textAlign:"center" }}>{row.b}</div>
+              <div style={{ fontSize:13.5, fontWeight:800, color:V, textAlign:"center", background:`${V}0C` }}>{row.a}</div>
+              <div style={{ fontSize:13, fontWeight:600, color:"#EF4444", textAlign:"center", opacity:.85 }}>{row.b}</div>
             </div>
           ))}
         </div>
+        </Reveal>
       </Section>
       <Section>
         <SectionHead pill="Témoignages" title="Ce que disent les restaurateurs" />
@@ -573,33 +697,43 @@ function Landing({ go }) {
             { t:"Pendant le rush du vendredi on ratait 15-20 appels. Maintenant ces clients reçoivent un SMS et commandent en ligne. On a récupéré des commandes qu'on aurait perdues.", n:"Karim B.", r:"Restaurant · Lyon" },
             { t:"J'étais sur Uber Eats, je payais une fortune en commission. AdBarth m'a coûté 49€ le premier mois et j'ai récupéré mes clients directement. Rentable dès la première semaine.", n:"Sarah M.", r:"Fast-food · Paris" },
             { t:"Le dashboard cuisine a changé notre organisation. Les commandes en ligne arrivent au même endroit, mon équipe ne rate plus rien.", n:"Naïm B.", r:"Fast-food · Marseille" },
-          ].map(t => (
-            <div key={t.n} style={{ background:"#181320", border:"1px solid #241D2F", borderRadius:18, padding:24 }}>
-              <div style={{ color:OR, fontSize:14, letterSpacing:3, marginBottom:14 }}>★★★★★</div>
-              <div style={{ fontSize:14, color:"#D2C9D6", lineHeight:1.7, marginBottom:16, fontStyle:"italic" }}>« {t.t} »</div>
-              <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                <div style={{ width:36, height:36, borderRadius:"50%", background:`linear-gradient(135deg,${R},${OR})`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:800, color:"#fff", flexShrink:0 }}>{t.n[0]}</div>
-                <div>
-                  <div style={{ fontSize:13, fontWeight:700 }}>{t.n}</div>
-                  <div style={{ fontSize:11, color:"#8A8295" }}>{t.r}</div>
+          ].map((t, i) => (
+            <Reveal key={t.n} delay={i * 90}>
+              <div className="lift" style={{ background:PANEL, border:`1px solid ${LINE}`, borderRadius:20, padding:26, height:"100%" }}>
+                <div style={{ fontFamily:"'Syne',sans-serif", fontSize:34, color:`${R}40`, lineHeight:.6, marginBottom:6 }}>“</div>
+                <div style={{ color:OR, fontSize:13, letterSpacing:3, marginBottom:14 }}>★★★★★</div>
+                <div style={{ fontSize:14, color:"#D2C9D6", lineHeight:1.72, marginBottom:18 }}>{t.t}</div>
+                <div style={{ display:"flex", alignItems:"center", gap:11, paddingTop:14, borderTop:`1px solid ${LINE}` }}>
+                  <div style={{ width:38, height:38, borderRadius:"50%", background:`linear-gradient(135deg,${R},${OR})`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:15, fontWeight:800, color:"#fff", flexShrink:0 }}>{t.n[0]}</div>
+                  <div>
+                    <div style={{ fontSize:13.5, fontWeight:700 }}>{t.n}</div>
+                    <div style={{ fontSize:11.5, color:MUT }}>{t.r}</div>
+                  </div>
                 </div>
               </div>
-            </div>
+            </Reveal>
           ))}
         </div>
       </Section>
-      <section style={{ padding:"90px 5vw", textAlign:"center", background:`linear-gradient(180deg, #0B0910 0%, ${R}0A 50%, #0B0910 100%)` }}>
-        <h2 style={{ fontFamily:"'Syne',sans-serif", fontSize:"clamp(26px,4.5vw,54px)", fontWeight:900, letterSpacing:"-1.5px", marginBottom:16, maxWidth:680, margin:"0 auto 16px" }}>
-          Prêt à ne plus rater aucun client ?
-        </h2>
-        <p style={{ color:"#8A8295", fontSize:16, marginBottom:36 }}>Installation en 15 minutes. Sans engagement.</p>
-        <PrimaryBtn lg onClick={() => go("pricing")}>Démarrer maintenant →</PrimaryBtn>
+      <section style={{ position:"relative", overflow:"hidden", padding:"clamp(72px,9vw,110px) 5vw", textAlign:"center" }}>
+        <div style={{ position:"absolute", inset:0, background:`radial-gradient(ellipse 60% 80% at 50% 120%, ${R}22, transparent 60%)`, pointerEvents:"none" }} />
+        <Reveal style={{ position:"relative", maxWidth:720, margin:"0 auto" }}>
+          <div style={{ fontSize:46, marginBottom:18, animation: RM?"none":"floaty 5s ease-in-out infinite" }}>🍳</div>
+          <h2 style={{ fontFamily:"'Syne',sans-serif", fontSize:"clamp(30px,5vw,58px)", fontWeight:800, letterSpacing:"-1.8px", lineHeight:1.05, marginBottom:18, color:"#fff" }}>
+            Prêt à ne plus rater<br/><span className="grad-text">aucun client&nbsp;?</span>
+          </h2>
+          <p style={{ color:MUT, fontSize:16, marginBottom:34 }}>Installation en 15 minutes. Sans engagement. Sans commission.</p>
+          <PrimaryBtn lg onClick={() => go("pricing")}>Démarrer maintenant →</PrimaryBtn>
+        </Reveal>
       </section>
-      <footer style={{ borderTop:"1px solid #241D2F", padding:"26px 5vw", display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:14 }}>
-        <Logo />
-        <div style={{ fontSize:13, color:"#6B6378" }}>© 2025 AdBarth · Tous droits réservés</div>
+      <footer style={{ borderTop:`1px solid ${LINE}`, padding:"32px 5vw", display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:16, background:BG1 }}>
+        <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+          <Logo />
+          <div style={{ fontSize:12, color:FAINT }}>L'appel manqué qui devient une commande.</div>
+        </div>
+        <div style={{ fontSize:13, color:FAINT }}>© 2025 AdBarth · Tous droits réservés</div>
         <div style={{ display:"flex", gap:20, flexWrap:"wrap" }}>
-          {[{ l:"Mentions légales", p:"mentions" }, { l:"CGV", p:"cgv" }, { l:"Confidentialité", p:"confidentialite" }].map(x => (<span key={x.p} onClick={() => go(x.p)} style={{ fontSize:13, color:"#6B6378", cursor:"pointer" }}>{x.l}</span>))}
+          {[{ l:"Mentions légales", p:"mentions" }, { l:"CGV", p:"cgv" }, { l:"Confidentialité", p:"confidentialite" }].map(x => (<span key={x.p} onClick={() => go(x.p)} style={{ fontSize:13, color:MUT, cursor:"pointer", transition:`color .2s ${EASE}` }} onMouseEnter={e=>e.currentTarget.style.color=R} onMouseLeave={e=>e.currentTarget.style.color=MUT}>{x.l}</span>))}
         </div>
       </footer>
     </div>
@@ -1436,11 +1570,11 @@ function Logo({ size = 18 }) {
 }
 function PrimaryBtn({ children, onClick, lg, sm, full, type = "button", style:st = {} }) {
   const [hov, setHov] = useState(false);
-  return (<button type={type} onClick={onClick} onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)} style={{ padding: lg ? "15px 30px" : sm ? "8px 16px" : "11px 22px", borderRadius:12, background: hov ? "#FF8555" : R, color:"#fff", border:"none", fontFamily:"'DM Sans',sans-serif", fontSize: lg ? 15 : sm ? 12 : 14, fontWeight:800, cursor:"pointer", width: full ? "100%" : "auto", display:"inline-flex", alignItems:"center", justifyContent:"center", gap:6, ...st }}>{children}</button>);
+  return (<button type={type} onClick={onClick} onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)} className="sheen" style={{ padding: lg ? "16px 32px" : sm ? "9px 17px" : "12px 23px", borderRadius:13, background: `linear-gradient(135deg, ${R}, ${OR})`, color:"#fff", border:"none", fontFamily:"'DM Sans',sans-serif", fontSize: lg ? 15 : sm ? 12.5 : 14, fontWeight:800, letterSpacing:".2px", cursor:"pointer", width: full ? "100%" : "auto", display:"inline-flex", alignItems:"center", justifyContent:"center", gap:7, boxShadow: hov ? `0 12px 30px -8px ${R}88, 0 0 0 1px ${R}55 inset` : `0 6px 18px -8px ${R}66`, transform: hov ? "translateY(-2px)" : "none", ...st }}>{children}</button>);
 }
 function GhostBtn({ children, onClick, lg, sm, full, type = "button" }) {
   const [hov, setHov] = useState(false);
-  return (<button type={type} onClick={onClick} onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)} style={{ padding: lg ? "15px 28px" : sm ? "8px 16px" : "11px 22px", borderRadius:12, background: hov ? "rgba(255,255,255,.05)" : "transparent", color: hov ? "#fff" : "#F2ECE4", border:`1.5px solid ${hov ? "#888" : "#34293F"}`, fontFamily:"'DM Sans',sans-serif", fontSize: lg ? 15 : sm ? 12 : 14, fontWeight:700, cursor:"pointer", width: full ? "100%" : "auto", display:"inline-flex", alignItems:"center", justifyContent:"center", gap:6 }}>{children}</button>);
+  return (<button type={type} onClick={onClick} onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)} style={{ padding: lg ? "16px 28px" : sm ? "9px 17px" : "12px 22px", borderRadius:13, background: hov ? "rgba(255,255,255,.06)" : "transparent", color: hov ? "#fff" : TXT, border:`1.5px solid ${hov ? R+"77" : LINE2}`, fontFamily:"'DM Sans',sans-serif", fontSize: lg ? 15 : sm ? 12.5 : 14, fontWeight:700, cursor:"pointer", width: full ? "100%" : "auto", display:"inline-flex", alignItems:"center", justifyContent:"center", gap:7, transform: hov ? "translateY(-2px)" : "none" }}>{children}</button>);
 }
 function AdminBtn({ children, onClick, color = R }) {
   return (<button type="button" onClick={onClick} style={{ padding:"6px 11px", borderRadius:8, background:`${color}18`, border:`1px solid ${color}40`, color, fontSize:10, fontWeight:700, cursor:"pointer", fontFamily:"inherit" }}>{children}</button>);
@@ -1452,14 +1586,14 @@ function TopBar({ title, sub, onBack, dot, badge }) {
   return (<div style={{ padding:"13px 16px", background:"#181320", borderBottom:"1px solid #241D2F", display:"flex", alignItems:"center", gap:12, position:"sticky", top:0, zIndex:10 }}><button type="button" onClick={onBack} style={{ background:"#241D2F", border:"none", color:"#F2ECE4", width:36, height:36, borderRadius:10, cursor:"pointer", fontSize:18, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>←</button><div style={{ flex:1 }}><div style={{ fontWeight:800, fontSize:15, display:"flex", alignItems:"center", gap:8, color:"#F2ECE4" }}>{title}{badge > 0 && <span style={{ background:R, color:"#fff", borderRadius:20, padding:"1px 9px", fontSize:11, fontWeight:800 }}>{badge}</span>}</div>{sub && (<div style={{ fontSize:12, color:"#8A8295", marginTop:1, display:"flex", alignItems:"center", gap:5 }}>{dot && <span style={{ width:7, height:7, borderRadius:"50%", background:dot, display:"inline-block" }} />}{sub}</div>)}</div><Logo size={15} /></div>);
 }
 function Section({ children, dark }) {
-  return (<section style={{ padding:"72px 5vw", background: dark ? "#100C16" : "#0B0910", borderTop:"1px solid #241D2F", borderBottom:"1px solid #241D2F" }}>{children}</section>);
+  return (<section style={{ padding:"clamp(56px,8vw,84px) 5vw", background: dark ? BG1 : BG, borderTop:`1px solid ${LINE}` }}>{children}</section>);
 }
 function SectionHead({ pill, title }) {
-  return (<div style={{ textAlign:"center", marginBottom:48 }}><div style={{ fontSize:11, fontWeight:700, color:R, letterSpacing:"1.5px", textTransform:"uppercase", marginBottom:12 }}>{pill}</div><h2 style={{ fontFamily:"'Syne',sans-serif", fontSize:"clamp(22px,3.5vw,40px)", fontWeight:900, letterSpacing:"-1px", color:"#fff", whiteSpace:"pre-line" }}>{title}</h2></div>);
+  return (<Reveal style={{ textAlign:"center", marginBottom:48 }}><div style={{ display:"inline-block", fontSize:11, fontWeight:700, color:R, letterSpacing:"1.6px", textTransform:"uppercase", marginBottom:14, background:`${R}12`, border:`1px solid ${R}30`, borderRadius:100, padding:"5px 14px" }}>{pill}</div><h2 style={{ fontFamily:"'Syne',sans-serif", fontSize:"clamp(24px,3.8vw,44px)", fontWeight:800, letterSpacing:"-1.2px", lineHeight:1.08, color:"#fff", whiteSpace:"pre-line" }}>{title}</h2></Reveal>);
 }
 function HoverCard({ children, subtle }) {
   const [hov, setHov] = useState(false);
-  return (<div style={{ background: subtle ? "#181320" : "#130F1A", border:`1px solid ${hov ? R+"50" : "#241D2F"}`, borderRadius:18, padding:22, transform: hov ? "translateY(-4px)" : "none", cursor:"default" }} onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}>{children}</div>);
+  return (<div className="lift" style={{ background: subtle ? PANEL : BG2, border:`1px solid ${hov ? R+"55" : LINE}`, borderRadius:18, padding:22, height:"100%", transform: hov ? "translateY(-5px)" : "none", boxShadow: hov ? `0 18px 40px -22px ${R}77` : "none", cursor:"default" }} onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}>{children}</div>);
 }
 function Card({ children, id }) {
   return <div id={id} style={{ background:"#181320", border:"1px solid #241D2F", borderRadius:16, padding:18, display:"flex", flexDirection:"column", gap:14 }}>{children}</div>;
