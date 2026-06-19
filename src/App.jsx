@@ -1058,6 +1058,11 @@ function Admin({ user, go, onLogout, orders = [], openGuide }) {
               <Toggle label="❓ Réponses automatiques aux questions" value={true} accent={V} />
             </div>
           </Card>
+          <Card>
+            <div style={{ fontSize:13, fontWeight:700, marginBottom:4 }}>💳 Paiement de la commande</div>
+            <Toggle label="Proposer le paiement en ligne" sub="Sinon, le client règle uniquement au restaurant" value={cfg.payEnLigne !== false} onChange={v => setCfg(c => ({ ...c, payEnLigne:v }))} accent={V} />
+            <p style={{ fontSize:11.5, color:"#6B6378", lineHeight:1.6, marginTop:6 }}>Le client choisit « payer en ligne » ou « payer au restaurant » après sa commande. Le statut s'affiche sur le ticket en cuisine. ⚙️ L'encaissement en ligne par carte nécessite la fonction serveur <span style={{ fontFamily:"monospace", color:"#A89FB0" }}>creer-paiement-commande</span> (voir PAIEMENT_ADBARTH.md) ; sans elle, le client est invité à régler au restaurant.</p>
+          </Card>
           <SaveBtn saved={saved} onClick={save} accent={accent} />
         </>}
         {tab === "menu" && <>
@@ -1227,8 +1232,10 @@ function Chatbot({ go, user, restoId, isPublic }) {
   // Message d'accueil une fois le menu chargé
   useEffect(() => {
     if (loadingMenu) return;
+    const justPaid = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("paye") === "1";
+    if (justPaid) { bot("✅ Merci, votre paiement a bien été reçu ! Votre commande est transmise en cuisine 🙏", 200); try { window.history.replaceState({}, "", window.location.pathname + "?r=" + (restoId || "")); } catch (e) {} }
     const base = cfg?.welcome ? cfg.welcome.replace(/{nom}/g, restoName) : `Bonjour ! 👋 Bienvenue chez ${restoName}.`;
-    bot(`${base}\n\nJe peux :\n🍔 Prendre votre commande\n📅 Réserver une table\n❓ Répondre à vos questions\n\nQue souhaitez-vous ?`, 300);
+    bot(`${base}\n\nJe peux :\n🍔 Prendre votre commande\n📅 Réserver une table\n❓ Répondre à vos questions\n\nQue souhaitez-vous ?`, justPaid ? 600 : 300);
   }, [loadingMenu]);
 
   useEffect(() => ref.current?.scrollIntoView({ behavior:"smooth" }), [msgs, cart, flow]);
@@ -1282,6 +1289,7 @@ function Chatbot({ go, user, restoId, isPublic }) {
     intent: ["🍔 Commander", "📅 Réserver une table", "❓ Infos & horaires"],
     resv_confirm: ["✅ Confirmer", "✏️ Modifier"],
     order_confirm: ["✅ Confirmer", "✏️ Modifier"],
+    order_pay: ["💳 Payer en ligne", "🏪 Payer au restaurant"],
     faq: ["Horaires ?", "Livraison ?", "Allergènes ?", "↩ Retour"],
   };
 
@@ -1399,7 +1407,7 @@ function Chatbot({ go, user, restoId, isPublic }) {
     if (/\b(livr|domicile|deliveroo|uber)/.test(t)) return "🛵 Pas de livraison pour l'instant — mais la commande à emporter est dispo ici !";
     if (/\b(emport|sur place|take ?away|click and collect|a recuperer|a recup)/.test(t)) return "🥡 C'est à emporter : commandez ici, puis venez récupérer 👍";
     if (/\b(allerg|gluten|vegan|vegetar|halal|porc|lactose|noix|arachide)/.test(t)) return "⚠️ Pour une allergie ou un régime, indiquez-le dans la commande (option « sans » ou demande libre) — on en tient compte.";
-    if (/\b(paie|paye|payer|paiement|carte|espece|\bcb\b|ticket ?resto|liquide|sumup)/.test(t)) return "💳 Le paiement se fait au restaurant, au moment de récupérer la commande.";
+    if (/\b(paie|paye|payer|paiement|carte|espece|\bcb\b|ticket ?resto|liquide|sumup)/.test(t)) return cfg?.payEnLigne !== false ? "💳 Comme vous préférez : payez en ligne à la fin de la commande, ou réglez au restaurant 🙂" : "💳 Le paiement se fait au restaurant, au moment de récupérer la commande.";
     if (/\b(prix|tarif|combien|cout)/.test(t) || /\bcher\b/.test(t)) { const it = findMenuItem(t); if (it) return `💶 Le ${it.name} est à ${priceNum(it.price).toFixed(2)}€.`; return "💶 Tous les prix sont indiqués sur le menu, par catégorie 👇"; }
     return null;
   }
@@ -1442,10 +1450,22 @@ function Chatbot({ go, user, restoId, isPublic }) {
 
     // ── Confirmation de commande ──
     if (flow === "order_confirm") {
-      if (isYes(t)) { confirmOrder(); return; }
+      if (isYes(t)) {
+        if (cfg?.payEnLigne !== false) { setFlow("order_pay"); bot("Parfait ! 🎉 Comment souhaitez-vous régler ?\n\n💳 Payer en ligne maintenant\n🏪 Payer au restaurant", 350); }
+        else { confirmOrder(); }
+        return;
+      }
       if (isNo(t) || t.includes("modif")) { setFlow("order_items"); bot("D'accord, ajustez votre panier 👇", 300); return; }
       if (addOrderFromText(txt, "Et avec ça :")) return; // le client rajoute un plat pendant la confirmation
       bot("Je valide la commande ? Répondez « oui » ✅ ou « modifier » ✏️", 350); return;
+    }
+
+    // ── Choix du paiement ──
+    if (flow === "order_pay") {
+      if (/\b(ligne|carte|\bcb\b|internet|maintenant|appli|\bapp\b|tout de suite|paypal|en ligne)/.test(t) || t.includes("💳")) { payerCommandeEnLigne(); return; }
+      if (/\b(resto|restau|restaurant|sur ?place|place|espece|liquide|cash|comptoir|caisse|arriv|recup|plus tard|au resto)/.test(t) || t.includes("🏪")) { confirmOrder(); return; }
+      if (isNo(t)) { setFlow("order_items"); bot("Pas de souci, ajustez votre commande 👇", 300); return; }
+      bot("Comment réglez-vous ? 💳 en ligne, ou 🏪 au restaurant ?", 350); return;
     }
 
     // ── Réservation : étapes ──
@@ -1553,13 +1573,27 @@ function Chatbot({ go, user, restoId, isPublic }) {
       "Pas de souci — dites-moi simplement ce que vous voulez manger (ex : « un menu et une boisson »), réserver une table, ou poser une question 😊",
     ]), 420);
   }
-  function confirmOrder() {
+  // Enregistre la commande (transmise en cuisine) avec son mode de paiement.
+  function recordOrder(ref, payNote) {
     const items = cart.map(c => `${c.qty}× ${c.name}${c.custom ? " (" + c.custom + ")" : ""}`);
-    db.add({ id:"CMD-"+uid(), client:"Client (chatbot)", type:"commande", items, total:`${cartTotal.toFixed(2)}€`, time:now(), status:"en_cours", note:"" });
+    db.add({ id: ref, client:"Client (chatbot)", type:"commande", items, total:`${cartTotal.toFixed(2)}€`, time:now(), status:"en_cours", note: payNote });
     setDone(true); setFlow("done");
-    bot(`🎉 Commande confirmée !\n\n${items.join("\n")}\n\n💰 Total : ${cartTotal.toFixed(2)}€\n\nMerci ! 🙏`, 400);
+    bot(`🎉 Commande confirmée !\n\n${items.join("\n")}\n\n💰 Total : ${cartTotal.toFixed(2)}€\n\n${payNote}\n\nMerci ! 🙏`, 400);
     setCart([]);
   }
+  // Paiement EN LIGNE : crée un encaissement côté serveur (SumUp) puis redirige.
+  // Si la fonction n'est pas (encore) déployée, on bascule proprement sur « au restaurant ».
+  async function payerCommandeEnLigne() {
+    const total = cartTotal; const ref = "CMD-" + uid();
+    try {
+      const { data, error } = await supabase.functions.invoke("creer-paiement-commande", {
+        body: { montant: Math.round(total * 100), ref, resto: restoId, total: total.toFixed(2) },
+      });
+      if (!error && data?.url) { recordOrder(ref, "💳 Paiement en ligne"); window.location.href = data.url; return; }
+    } catch (e) {}
+    bot("Le paiement en ligne n'est pas encore activé pour ce restaurant 🙏\nVotre commande peut être réglée au restaurant : touchez « 🏪 Payer au restaurant ».", 400);
+  }
+  function confirmOrder() { recordOrder("CMD-" + uid(), "🏪 À régler au restaurant"); }
   function confirmResv() {
     db.add({ id:"RES-"+uid(), client:"Client (chatbot)", type:"reservation", items:[`Table pour ${resv.persons} personne${resv.persons > 1 ? "s" : ""}`, `${resv.date} à ${resv.time}`], total:"—", time:now(), status:"en_cours", note:resv.note || "" });
     setDone(true); setFlow("done");
