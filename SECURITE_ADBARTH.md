@@ -27,6 +27,15 @@ ou **B)** Supabase → **SQL Editor → New query** → coller tout `db/01_secur
 Le script est **idempotent** (rejouable sans risque) et affiche une vérif : `rowsecurity`
 doit être `true` sur `comptes` et `commandes`.
 
+**Vérifier l'isolation à tout moment** (sonde la base avec la clé publique anonyme) :
+
+```bash
+node ~/adbart/tools/test_isolation.mjs
+```
+
+Attendu : un anonyme ne lit **aucun** compte ni commande, et la vitrine publique
+n'expose ni email, ni plan, ni abonnement. (Testé OK le 2026-06-19 : 5 ✅ / 0 ❌.)
+
 > ⚠️ Vérifie d'abord que les noms de colonnes correspondent à ta base
 > (`comptes.id = auth.uid()`, `commandes.compte_id`). Ils correspondent au code actuel.
 

@@ -866,7 +866,7 @@ function Admin({ user, go, onLogout, orders = [], openGuide }) {
   });
   const [menu, setMenu] = useState([]);
   const [cats, setCats] = useState(["Entrées", "Plats", "Desserts", "Boissons"]);
-  const [form, setForm] = useState({ cat:"", name:"", price:"", emoji:"🍔", desc:"" });
+  const [form, setForm] = useState({ cat:"", name:"", price:"", emoji:"🍔", desc:"", ingredients:"" });
   const [editId, setEditId] = useState(null);
   const [newCat, setNewCat] = useState("");
   const [saved, setSaved] = useState(false);
@@ -909,13 +909,14 @@ function Admin({ user, go, onLogout, orders = [], openGuide }) {
     if (!form.name || !form.price || !form.cat) return;
     const price = validPrice(form.price);
     if (price === null) { setToast("⚠️ Prix invalide (entre 0 et 1000 €)"); setTimeout(() => setToast(""), 2800); return; }
-    const clean = { ...form, name: sanitizeText(form.name, 60), desc: sanitizeText(form.desc, LIMITS.text), price: String(price) };
+    const ingredients = String(form.ingredients || "").split(",").map(s => sanitizeText(s, 30)).filter(Boolean).slice(0, 12);
+    const clean = { ...form, name: sanitizeText(form.name, 60), desc: sanitizeText(form.desc, LIMITS.text), price: String(price), ingredients };
     if (editId !== null) { setMenu(m => m.map(i => i.id === editId ? { ...clean, id:editId, on:true } : i)); setEditId(null); }
     else { setMenu(m => [...m, { ...clean, id: uid(), on:true }]); }
-    setForm({ cat:form.cat, name:"", price:"", emoji:"🍔", desc:"" });
+    setForm({ cat:form.cat, name:"", price:"", emoji:"🍔", desc:"", ingredients:"" });
   }
   function startEdit(item) {
-    setForm({ cat:item.cat, name:item.name, price:item.price, emoji:item.emoji, desc:item.desc });
+    setForm({ cat:item.cat, name:item.name, price:item.price, emoji:item.emoji, desc:item.desc, ingredients: Array.isArray(item.ingredients) ? item.ingredients.join(", ") : "" });
     setEditId(item.id); setTab("menu");
     setTimeout(() => document.getElementById("mform")?.scrollIntoView({ behavior:"smooth" }), 120);
   }
@@ -1056,9 +1057,13 @@ function Admin({ user, go, onLogout, orders = [], openGuide }) {
             <Field l="Nom du plat"><input value={form.name} onChange={e => setForm(f => ({ ...f, name:e.target.value }))} placeholder="ex: Magret de canard" maxLength={60} style={I} /></Field>
             <Field l="Prix (€)"><input value={form.price} onChange={e => setForm(f => ({ ...f, price:e.target.value }))} placeholder="ex: 18.50" type="number" step="0.01" min="0" max="1000" style={I} /></Field>
             <Field l="Description (optionnel)"><input value={form.desc} onChange={e => setForm(f => ({ ...f, desc:e.target.value }))} placeholder="ex: Pommes sarladaises" maxLength={120} style={I} /></Field>
+            <Field l="Ingrédients modifiables (optionnel)">
+              <input value={form.ingredients} onChange={e => setForm(f => ({ ...f, ingredients:e.target.value }))} placeholder="ex: cornichon, oignon, sauce, cheddar" maxLength={200} style={I} />
+              <p style={{ fontSize:11, color:"#6B6378", marginTop:5, lineHeight:1.5 }}>Séparés par des virgules. Le client pourra dire « sans cornichon » dans le chatbot. Laissez vide si le plat n'est pas personnalisable.</p>
+            </Field>
             <div style={{ display:"flex", gap:10 }}>
               <button type="button" onClick={addItem} style={{ flex:1, padding:"12px", borderRadius:12, background:accent, color:"#fff", border:"none", fontWeight:700, fontSize:14, cursor:"pointer" }}>{editId !== null ? "✓ Mettre à jour" : "➕ Ajouter au menu"}</button>
-              {editId !== null && (<button type="button" onClick={() => { setEditId(null); setForm({ cat:"", name:"", price:"", emoji:"🍔", desc:"" }); }} style={{ padding:"12px 14px", borderRadius:12, background:"#241D2F", color:"#A89FB0", border:"1px solid #34293F", fontWeight:700, fontSize:13, cursor:"pointer" }}>Annuler</button>)}
+              {editId !== null && (<button type="button" onClick={() => { setEditId(null); setForm({ cat:"", name:"", price:"", emoji:"🍔", desc:"", ingredients:"" }); }} style={{ padding:"12px 14px", borderRadius:12, background:"#241D2F", color:"#A89FB0", border:"1px solid #34293F", fontWeight:700, fontSize:13, cursor:"pointer" }}>Annuler</button>)}
             </div>
           </Card>
           {menu.length === 0 && (<div style={{ textAlign:"center", color:"#6B6378", padding:"32px 0" }}><div style={{ fontSize:36, marginBottom:10 }}>🍽️</div><div style={{ fontSize:14 }}>Votre menu est vide.<br />Ajoutez votre premier plat ci-dessus.</div></div>)}
@@ -1072,6 +1077,7 @@ function Admin({ user, go, onLogout, orders = [], openGuide }) {
                     <div style={{ flex:1, minWidth:0 }}>
                       <div style={{ fontSize:14, fontWeight:700, color:"#F2ECE4" }}>{item.name}</div>
                       {item.desc && <div style={{ fontSize:11, color:"#8A8295", marginTop:2 }}>{item.desc}</div>}
+                      {Array.isArray(item.ingredients) && item.ingredients.length > 0 && <div style={{ fontSize:10.5, color:V, marginTop:2, fontWeight:600 }}>✨ {item.ingredients.length} ingrédient{item.ingredients.length > 1 ? "s" : ""} modifiable{item.ingredients.length > 1 ? "s" : ""}</div>}
                       <div style={{ fontSize:13, fontWeight:800, color:OR, marginTop:5 }}>{item.price}€</div>
                     </div>
                     <div style={{ display:"flex", flexDirection:"column", gap:6, flexShrink:0 }}>
@@ -1153,12 +1159,16 @@ function Chatbot({ go, user, restoId, isPublic }) {
 
   const [flow, setFlow] = useState("welcome");
   const [selCat, setSelCat] = useState(null);
-  const [cart, setCart] = useState([]); // {id,name,emoji,price,qty}
+  const [cart, setCart] = useState([]); // {lineId,id,name,emoji,price,qty,custom}
   const [resv, setResv] = useState({});
   const [msgs, setMsgs] = useState([]);
   const [input, setInput] = useState("");
   const [done, setDone] = useState(false);
   const ref = useRef(null);
+  // Personnalisation d'un plat (« sans cornichon », « bien cuit »…)
+  const [customizing, setCustomizing] = useState(null); // l'article en cours de personnalisation
+  const [removed, setRemoved] = useState([]);            // ingrédients retirés
+  const [extra, setExtra] = useState("");                // demande libre du client
 
   function bot(t, d = 420) { setTimeout(() => setMsgs(p => [...p, { r:"bot", t }]), d); }
   function usr(t) { setMsgs(p => [...p, { r:"usr", t }]); }
@@ -1195,21 +1205,43 @@ function Chatbot({ go, user, restoId, isPublic }) {
 
   // ── Panier (quantité plafonnée entre 1 et 20) ──
   function priceNum(p) { return parseFloat(String(p).replace(",", ".")) || 0; }
-  function addToCart(item) {
+  // Ajoute un article avec sa personnalisation ; deux fois le même plat avec la
+  // même demande → on cumule la quantité ; sinon → deux lignes distinctes.
+  function addToCart(item, custom = "") {
+    const sig = item.id + "|" + custom;
     setCart(cur => {
-      const ex = cur.find(c => c.id === item.id);
-      if (ex) return cur.map(c => c.id === item.id ? { ...c, qty: Math.min(LIMITS.qty.max, c.qty + 1) } : c);
-      return [...cur, { id:item.id, name:item.name, emoji:item.emoji, price:priceNum(item.price), qty:1 }];
+      const ex = cur.find(c => c.sig === sig);
+      if (ex) return cur.map(c => c.sig === sig ? { ...c, qty: Math.min(LIMITS.qty.max, c.qty + 1) } : c);
+      return [...cur, { lineId: item.id + "-" + uid(), sig, id:item.id, name:item.name, emoji:item.emoji, price:priceNum(item.price), qty:1, custom }];
     });
   }
-  function changeQty(id, delta) {
+  function changeQty(lineId, delta) {
     setCart(cur => cur.flatMap(c => {
-      if (c.id !== id) return [c];
+      if (c.lineId !== lineId) return [c];
       const q = Math.min(LIMITS.qty.max, c.qty + delta);
       return q < 1 ? [] : [{ ...c, qty:q }];
     }));
   }
   const cartTotal = cart.reduce((s, c) => s + c.price * c.qty, 0);
+
+  // ── Personnalisation d'un plat ──
+  const ingList = item => Array.isArray(item?.ingredients) ? item.ingredients.filter(Boolean) : [];
+  function openCustomizer(item) { setCustomizing(item); setRemoved([]); setExtra(""); }
+  function toggleRemoved(ing) { setRemoved(r => r.includes(ing) ? r.filter(x => x !== ing) : [...r, ing]); }
+  // Construit l'étiquette lisible : « sans cornichon · sans oignon · bien cuit »
+  function buildCustom() {
+    const parts = removed.map(r => "sans " + r);
+    const note = sanitizeText(extra, 80);
+    if (note) parts.push(note);
+    return parts.join(" · ");
+  }
+  function confirmCustom() {
+    if (!customizing) return;
+    addToCart(customizing, buildCustom());
+    const label = buildCustom();
+    bot(label ? `C'est noté : ${customizing.name} (${label}) ✍️` : `${customizing.emoji} ${customizing.name}, parfait choix ! Ajouté 👌`, 200);
+    setCustomizing(null); setRemoved([]); setExtra("");
+  }
 
   const QR = {
     welcome: ["🍔 Commander", "📅 Réserver une table", "❓ Infos & horaires"],
@@ -1227,20 +1259,43 @@ function Chatbot({ go, user, restoId, isPublic }) {
   function startRecap() {
     if (cart.length === 0) return;
     setFlow("order_confirm");
-    const lines = cart.map(c => `${c.qty}× ${c.name}`).join("\n");
+    const lines = cart.map(c => `${c.qty}× ${c.name}${c.custom ? "  (" + c.custom + ")" : ""}`).join("\n");
     bot(`Voici votre commande :\n\n${lines}\n\n💰 Total : ${cartTotal.toFixed(2)}€\n\nJe confirme ?`, 300);
+  }
+
+  // Choisit une formulation au hasard (le bot paraît plus vivant, moins robotique)
+  function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+  // Repère un plat du menu cité en clair dans la phrase du client
+  function findMenuItem(t) {
+    const norm = s => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+    const tt = norm(t);
+    return menu.find(i => tt.includes(norm(i.name))) ||
+           menu.find(i => { const w = norm(i.name).split(/\s+/)[0]; return w.length > 2 && tt.includes(w); });
   }
 
   function proc(txt) {
     const t = txt.toLowerCase();
     if (flow === "welcome" || flow === "intent") {
-      if (t.includes("command") || t.includes("emport") || t.includes("🍔") || t.includes("manger")) {
-        if (menu.length === 0) { bot("Le menu n'est pas encore disponible en ligne. Appelez-nous directement pour commander 🙏", 450); return; }
-        setFlow("order_cat"); bot("Bien sûr ! Choisissez une catégorie 👇", 400);
+      // Politesse — on répond comme un vrai serveur
+      if (/^(bonjour|bonsoir|salut|coucou|hello|hey|yo)\b/.test(t.trim())) {
+        bot(pick([`Bonsoir ! 😊 Ravi de vous accueillir. Vous voulez commander, réserver une table, ou des infos ?`, `Bonjour ! 👋 Avec plaisir. Une commande à emporter, une réservation, ou une question ?`]), 380); return;
       }
-      else if (t.includes("réserv") || t.includes("table") || t.includes("📅")) { setFlow("resv_persons"); bot("Pour combien de personnes souhaitez-vous réserver ?", 450); }
-      else if (t.includes("info") || t.includes("horaire") || t.includes("❓")) { setFlow("faq"); bot("Sur quoi puis-je vous renseigner ?", 450); }
-      else { bot("Je peux vous aider à commander, réserver une table, ou répondre à vos questions. Que souhaitez-vous ?", 400); }
+      if (t.includes("merci")) { bot(pick(["Avec grand plaisir ! 😊", "Je vous en prie ! 🙏 Autre chose ?"]), 350); return; }
+      // Le client nomme un plat directement → on le propose tout de suite
+      const cited = findMenuItem(t);
+      if (cited && (t.includes("command") || t.includes("veux") || t.includes("voudrais") || t.includes("prend") || t.includes("manger") || t.includes("envie") || cited)) {
+        setFlow("order_items"); setSelCat(cited.cat);
+        bot(pick([`Excellent choix, le ${cited.name} ! 😋 Je vous le prépare comment ?`, `Ah, le ${cited.name}, très bon choix ! Une préférence pour le préparer ?`]), 360);
+        setTimeout(() => openCustomizer(cited), 420);
+        return;
+      }
+      if (t.includes("command") || t.includes("emport") || t.includes("🍔") || t.includes("manger") || t.includes("faim")) {
+        if (menu.length === 0) { bot("Le menu n'est pas encore en ligne — appelez-nous directement, on s'occupe de vous 🙏", 450); return; }
+        setFlow("order_cat"); bot(pick(["Avec plaisir ! On commence par quoi ? 👇", "Bien sûr ! Choisissez une catégorie pour voir nos plats 👇"]), 400);
+      }
+      else if (t.includes("réserv") || t.includes("table") || t.includes("📅")) { setFlow("resv_persons"); bot("Avec plaisir ! Pour combien de personnes ? 👥", 450); }
+      else if (t.includes("info") || t.includes("horaire") || t.includes("❓")) { setFlow("faq"); bot("Bien sûr, sur quoi puis-je vous renseigner ?", 450); }
+      else { bot("Je peux vous aider à 🍔 commander, 📅 réserver une table, ou ❓ répondre à vos questions. Que souhaitez-vous ?", 400); }
       return;
     }
     if (flow === "order_confirm") {
@@ -1278,10 +1333,13 @@ function Chatbot({ go, user, restoId, isPublic }) {
       else { bot("Pour toute autre question, appelez-nous ! 😊", 400); }
       return;
     }
-    bot("Je n'ai pas bien compris. Pouvez-vous reformuler ?", 400);
+    // Dernier recours : le client a peut-être nommé un plat
+    const cited = findMenuItem(t);
+    if (cited) { setFlow("order_items"); setSelCat(cited.cat); bot(`Vous voulez dire le ${cited.name} ? 😋`, 350); setTimeout(() => openCustomizer(cited), 420); return; }
+    bot(pick(["Pardon, je n'ai pas tout saisi 🙈 Vous pouvez reformuler, ou utiliser les boutons ci-dessous.", "Hmm, je ne suis pas sûr d'avoir compris. Dites-moi : commander, réserver, ou une question ?"]), 400);
   }
   function confirmOrder() {
-    const items = cart.map(c => `${c.qty}× ${c.name}`);
+    const items = cart.map(c => `${c.qty}× ${c.name}${c.custom ? " (" + c.custom + ")" : ""}`);
     db.add({ id:"CMD-"+uid(), client:"Client (chatbot)", type:"commande", items, total:`${cartTotal.toFixed(2)}€`, time:now(), status:"en_cours", note:"" });
     setDone(true); setFlow("done");
     bot(`🎉 Commande confirmée !\n\n${items.join("\n")}\n\n💰 Total : ${cartTotal.toFixed(2)}€\n\nMerci ! 🙏`, 400);
@@ -1321,11 +1379,46 @@ function Chatbot({ go, user, restoId, isPublic }) {
                 <div style={{ flex:1, minWidth:0 }}>
                   <div style={{ fontSize:14, fontWeight:700, color:"#F2ECE4" }}>{it.name}</div>
                   {it.desc && <div style={{ fontSize:11, color:"#8A8295", marginTop:1 }}>{it.desc}</div>}
+                  {ingList(it).length > 0 && <div style={{ fontSize:10.5, color:V, marginTop:2, fontWeight:600 }}>✨ personnalisable</div>}
                   <div style={{ fontSize:13, fontWeight:800, color:OR, marginTop:3 }}>{priceNum(it.price).toFixed(2)}€</div>
                 </div>
-                <button type="button" onClick={() => addToCart(it)} style={{ padding:"8px 14px", borderRadius:10, background:R, color:"#fff", border:"none", fontWeight:700, fontSize:13, cursor:"pointer" }}>＋ Ajouter</button>
+                <button type="button" onClick={() => openCustomizer(it)} style={{ padding:"8px 14px", borderRadius:10, background:R, color:"#fff", border:"none", fontWeight:700, fontSize:13, cursor:"pointer" }}>＋ Ajouter</button>
               </div>
             ))}
+          </div>
+        )}
+
+        {/* Personnalisation du plat : « complet » ou « sans tel ingrédient » + demande libre */}
+        {customizing && (
+          <div className="fu" style={{ background:`linear-gradient(165deg, #1d1626, ${PANEL})`, border:`1.5px solid ${R}66`, borderRadius:16, padding:"15px 16px", boxShadow:`0 18px 44px -26px ${R}88` }}>
+            <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:4 }}>
+              <span style={{ fontSize:26 }}>{customizing.emoji}</span>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ fontSize:15, fontWeight:800, color:"#fff" }}>{customizing.name}</div>
+                <div style={{ fontSize:12, color:OR, fontWeight:700 }}>{priceNum(customizing.price).toFixed(2)}€</div>
+              </div>
+              <button type="button" onClick={() => setCustomizing(null)} style={{ background:LINE, border:`1px solid ${LINE2}`, color:MUT, width:30, height:30, borderRadius:9, cursor:"pointer", fontSize:14 }}>✕</button>
+            </div>
+            <div style={{ fontSize:13, color:MUT, margin:"6px 0 12px", lineHeight:1.5 }}>Comment le souhaitez-vous ? 😋</div>
+            {ingList(customizing).length > 0 ? (
+              <>
+                <div style={{ fontSize:11, fontWeight:700, color:V, letterSpacing:.6, marginBottom:8 }}>RETIRER UN INGRÉDIENT ?</div>
+                <div style={{ display:"flex", flexWrap:"wrap", gap:8, marginBottom:14 }}>
+                  {ingList(customizing).map(ing => { const off = removed.includes(ing); return (
+                    <button key={ing} type="button" onClick={() => toggleRemoved(ing)} style={{ padding:"7px 13px", borderRadius:22, fontSize:12.5, fontWeight:700, cursor:"pointer", background: off ? "#EF444420" : `${V}12`, border:`1.5px solid ${off ? "#EF4444" : V+"40"}`, color: off ? "#EF4444" : V, textDecoration: off ? "line-through" : "none", fontFamily:"inherit" }}>{off ? "🚫 sans " : ""}{ing}</button>
+                  ); })}
+                </div>
+              </>
+            ) : (
+              <div style={{ fontSize:12.5, color:"#8A8295", marginBottom:12, lineHeight:1.6 }}>Une demande particulière ? Indiquez-la ci-dessous (sinon ce sera « complet », préparé comme d'habitude 👍).</div>
+            )}
+            <input value={extra} onChange={e => setExtra(e.target.value)} onKeyDown={e => e.key === "Enter" && confirmCustom()} placeholder="Ex : sans sauce, bien cuit, allergie aux noix…" maxLength={80} style={{ width:"100%", background:BG2, border:`1.5px solid ${LINE2}`, borderRadius:11, color:TXT, fontSize:13.5, padding:"11px 13px", fontFamily:"inherit" }} />
+            <div style={{ display:"flex", gap:8, marginTop:12 }}>
+              {ingList(customizing).length > 0 && removed.length === 0 && !extra && (
+                <button type="button" onClick={confirmCustom} style={{ flex:1, padding:"12px", borderRadius:12, background:`${V}18`, color:V, border:`1px solid ${V}55`, fontWeight:800, fontSize:13.5, cursor:"pointer", fontFamily:"inherit" }}>👍 Complet</button>
+              )}
+              <button type="button" onClick={confirmCustom} style={{ flex:2, padding:"12px", borderRadius:12, background:R, color:"#fff", border:"none", fontWeight:800, fontSize:14, cursor:"pointer", fontFamily:"inherit" }}>Ajouter au panier →</button>
+            </div>
           </div>
         )}
 
@@ -1334,12 +1427,15 @@ function Chatbot({ go, user, restoId, isPublic }) {
           <div className="fu" style={{ background:"#181320", border:`1px solid ${R}45`, borderRadius:14, padding:"12px 14px" }}>
             <div style={{ fontSize:11, fontWeight:700, color:R, letterSpacing:1, marginBottom:10 }}>🛒 VOTRE PANIER</div>
             {cart.map(c => (
-              <div key={c.id} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:8, marginBottom:8 }}>
-                <div style={{ fontSize:13, color:"#F2ECE4", flex:1, minWidth:0 }}>{c.emoji} {c.name}</div>
+              <div key={c.lineId} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:8, marginBottom:8 }}>
+                <div style={{ fontSize:13, color:"#F2ECE4", flex:1, minWidth:0 }}>
+                  {c.emoji} {c.name}
+                  {c.custom && <div style={{ fontSize:11, color:OR, marginTop:1, fontStyle:"italic" }}>↳ {c.custom}</div>}
+                </div>
                 <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                  <button type="button" onClick={() => changeQty(c.id, -1)} style={{ width:26, height:26, borderRadius:7, background:"#241D2F", border:"1px solid #34293F", color:"#F2ECE4", fontSize:16, cursor:"pointer", lineHeight:1 }}>−</button>
+                  <button type="button" onClick={() => changeQty(c.lineId, -1)} style={{ width:26, height:26, borderRadius:7, background:"#241D2F", border:"1px solid #34293F", color:"#F2ECE4", fontSize:16, cursor:"pointer", lineHeight:1 }}>−</button>
                   <span style={{ fontSize:14, fontWeight:700, minWidth:18, textAlign:"center" }}>{c.qty}</span>
-                  <button type="button" onClick={() => changeQty(c.id, 1)} disabled={c.qty >= LIMITS.qty.max} style={{ width:26, height:26, borderRadius:7, background: c.qty >= LIMITS.qty.max ? "#241D2F" : R, border:"none", color:"#fff", fontSize:16, cursor: c.qty >= LIMITS.qty.max ? "not-allowed" : "pointer", lineHeight:1 }}>＋</button>
+                  <button type="button" onClick={() => changeQty(c.lineId, 1)} disabled={c.qty >= LIMITS.qty.max} style={{ width:26, height:26, borderRadius:7, background: c.qty >= LIMITS.qty.max ? "#241D2F" : R, border:"none", color:"#fff", fontSize:16, cursor: c.qty >= LIMITS.qty.max ? "not-allowed" : "pointer", lineHeight:1 }}>＋</button>
                   <span style={{ fontSize:13, fontWeight:800, color:OR, minWidth:54, textAlign:"right" }}>{(c.price * c.qty).toFixed(2)}€</span>
                 </div>
               </div>
