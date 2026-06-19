@@ -1308,8 +1308,9 @@ function Chatbot({ go, user, restoId, isPublic }) {
     return null;
   }
   function qtyIn(s) { const n = numIn(s); return n ? Math.max(1, Math.min(LIMITS.qty.max, n)) : 1; }
-  const isYes = t => /\b(oui|ouais|ouai|yep|yes|ok|okay|dac|d'?accord|carrement|parfait|nickel|impeccable|confirme|valide|c'?est bon|ca marche|ça marche|go|vas-?y|allez|👍|✅)\b/.test(t);
-  const isNo  = t => /\b(non|nan|no|nope|pas (ca|ça)|plutot|plutôt|modif|change|attend|annul|✏)\b/.test(t);
+  // Note : on n'utilise PAS de \b de fin pour les radicaux (sinon « valider » ≠ « valid »).
+  const isYes = t => /\b(oui+|ouais|ouai|yep|yes|ok|okay|dac|d'?accord|carrement|parfait|nickel|impeccable|c'?est bon|ca marche|ça marche|go|vas-?y|allez|👍|✅)\b/.test(t) || /\b(valid|confirm|accord)/.test(t);
+  const isNo  = t => /\b(non|nan|no|nope|pas (ca|ça)|plutot|plutôt|✏)\b/.test(t) || /\b(modif|annul|chang|attend)/.test(t);
 
   // Distance d'édition (tolérance aux fautes de frappe), bornée pour rester rapide
   function lev(a, b) {
@@ -1337,17 +1338,19 @@ function Chatbot({ go, user, restoId, isPublic }) {
     }
     return null;
   }
-  // Retire une unité d'un plat du panier
+  // Retire une unité d'un plat du panier ; renvoie un booléen FIABLE (sans dépendre
+  // du retour asynchrone de setCart) en regardant le panier courant.
   function removeFromCart(item) {
-    let removed = false;
+    const present = cart.some(c => c.id === item.id);
+    if (!present) return false;
     setCart(cur => {
       const idx = cur.findIndex(c => c.id === item.id);
-      if (idx < 0) return cur; removed = true;
+      if (idx < 0) return cur;
       const line = cur[idx];
       if (line.qty > 1) return cur.map((c, i) => i === idx ? { ...c, qty: c.qty - 1 } : c);
       return cur.filter((_, i) => i !== idx);
     });
-    return removed;
+    return true;
   }
   // Ingrédients à retirer cités après « sans … »
   function sansIn(s) {
@@ -1390,14 +1393,14 @@ function Chatbot({ go, user, restoId, isPublic }) {
   // Répond à une question courante (horaires, adresse, prix…) ou renvoie null
   function answerFaq(t) {
     const h1 = cfg?.hours1 || "12:00 – 14:30", h2 = cfg?.hours2 || "19:00 – 23:30";
-    if (/\b(horaire|ouvert|ouvre|ferme|ferme|heure|quand)\b/.test(t)) return `🕐 Nos horaires : midi ${h1}, soir ${h2}.`;
-    if (/\b(adresse|ou (etes|se trouve|est)|ou vous|localis|situe|venir|plan|itinerair)\b/.test(t)) return cfg?.address ? `📍 Nous sommes au ${cfg.address}.` : "📍 Appelez-nous pour l'adresse exacte 🙏";
-    if (/\b(telephone|numero|appeler|joindre|contact|portable)\b/.test(t)) return cfg?.phone ? `📞 Notre numéro : ${cfg.phone}.` : "📞 Vous pouvez passer commande directement ici 🙂";
-    if (/\b(livr|livraison|livrer|domicile|deliveroo|uber)\b/.test(t)) return "🛵 Pas de livraison pour l'instant — mais la commande à emporter est dispo ici !";
-    if (/\b(emporter|emporte|a emporter|sur place|take ?away|click)\b/.test(t)) return "🥡 C'est à emporter : commandez ici, puis venez récupérer 👍";
-    if (/\b(allerg|gluten|vegan|vegetarien|vegetar|halal|porc|sans porc|lactose|noix|arachide)\b/.test(t)) return "⚠️ Pour une allergie ou un régime, indiquez-le dans la commande (option « sans » ou demande libre) — on en tient compte.";
-    if (/\b(paie|payer|carte|espece|cb|ticket ?resto|liquide|sumup)\b/.test(t)) return "💳 Le paiement se fait au restaurant, au moment de récupérer la commande.";
-    if (/\b(prix|tarif|combien|coute|coute|cher)\b/.test(t)) { const it = findMenuItem(t); if (it) return `💶 Le ${it.name} est à ${priceNum(it.price).toFixed(2)}€.`; return "💶 Tous les prix sont indiqués sur le menu, par catégorie 👇"; }
+    if (/\b(horaire|ouvert|ouvre|ferme|heure|quand|jusqu'?a|encore ouvert)/.test(t)) return `🕐 Nos horaires : midi ${h1}, soir ${h2}.`;
+    if (/\b(adresse|localis|situe|venir|itinerair)/.test(t) || /(\bou (etes|se|est|vous)|c'?est ou|vous etes ou|\bplan\b|comment venir|\badresse)/.test(t)) return cfg?.address ? `📍 Nous sommes au ${cfg.address}.` : "📍 Appelez-nous pour l'adresse exacte 🙏";
+    if (/\b(telephone|numero|appel|joindre|contact|portable)/.test(t)) return cfg?.phone ? `📞 Notre numéro : ${cfg.phone}.` : "📞 Vous pouvez passer commande directement ici 🙂";
+    if (/\b(livr|domicile|deliveroo|uber)/.test(t)) return "🛵 Pas de livraison pour l'instant — mais la commande à emporter est dispo ici !";
+    if (/\b(emport|sur place|take ?away|click and collect|a recuperer|a recup)/.test(t)) return "🥡 C'est à emporter : commandez ici, puis venez récupérer 👍";
+    if (/\b(allerg|gluten|vegan|vegetar|halal|porc|lactose|noix|arachide)/.test(t)) return "⚠️ Pour une allergie ou un régime, indiquez-le dans la commande (option « sans » ou demande libre) — on en tient compte.";
+    if (/\b(paie|paye|payer|paiement|carte|espece|\bcb\b|ticket ?resto|liquide|sumup)/.test(t)) return "💳 Le paiement se fait au restaurant, au moment de récupérer la commande.";
+    if (/\b(prix|tarif|combien|cout)/.test(t) || /\bcher\b/.test(t)) { const it = findMenuItem(t); if (it) return `💶 Le ${it.name} est à ${priceNum(it.price).toFixed(2)}€.`; return "💶 Tous les prix sont indiqués sur le menu, par catégorie 👇"; }
     return null;
   }
 
@@ -1405,7 +1408,7 @@ function Chatbot({ go, user, restoId, isPublic }) {
     const t = norm(txt);
 
     // ── Commandes universelles (n'importe quand) ──
-    if (/\b(recommenc|on recommence|reset|repart|tout (effac|annul|recommenc)|efface tout|reinitialis)\b/.test(t)) {
+    if (/\b(recommenc|reset|repart|tout (effac|annul|recommenc)|efface tout|reinitialis|on annule tout|tout reprendre)/.test(t)) {
       setCart([]); setResv({}); setSelCat(null); setCustomizing(null); setFlow("intent");
       bot("C'est reparti de zéro 🔄 Vous voulez commander, réserver, ou une info ?", 300); return;
     }
@@ -1442,19 +1445,24 @@ function Chatbot({ go, user, restoId, isPublic }) {
 
     // ── FAQ (ou question posée n'importe quand) ──
     if (flow === "faq") {
-      if (/\b(retour|menu|commander|reserv|↩)\b/.test(t)) { setFlow("intent"); bot("D'accord ! Commander 🍔, réserver 📅, ou une autre question ?", 400); return; }
+      if (/\b(retour|menu|command|reserv|↩)/.test(t)) { setFlow("intent"); bot("D'accord ! Commander 🍔, réserver 📅, ou une autre question ?", 400); return; }
       bot(answerFaq(t) || "Bonne question ! Pour ce point précis, le mieux est de nous appeler 😊 Autre chose ?", 400); return;
     }
 
     // ── Accueil / commande en cours / intention libre ──
-    if (/^(bonjour|bonsoir|salut|slt|coucou|cc|hello|hi|hey|yo|wesh|salam|bjr)\b/.test(t)) {
-      bot(pick(["Bonsoir ! 😊 Ravi de vous accueillir. Commander, réserver, ou une info ?", "Bonjour ! 👋 Avec plaisir — une commande, une réservation, ou une question ?"]), 380); return;
+    // Salutation : si le message ne contient QUE ça, on accueille ; sinon (« bonjour je veux un burger »)
+    // on laisse filer pour traiter la vraie demande qui suit.
+    if (/^(bonjour|bonsoir|salut|slt|coucou|cou+cou|cc|hello|hi|hey|yo|wesh|salam|bjr|bsr)\b/.test(t)) {
+      const rest = t.replace(/^(bonjour|bonsoir|salut|slt|coucou|cou+cou|cc|hello|hi|hey|yo|wesh|salam|bjr|bsr)[\s,!.;:]*/, "").trim();
+      const meaningful = rest && (findMenuItem(rest) || /\b(je veux|voudrais|command|reserv|table|manger|faim|emport|prendre|prend|boire|menu|carte|combien|horaire|adresse|livr)/.test(rest));
+      if (!meaningful) { bot(pick(["Bonsoir ! 😊 Ravi de vous accueillir. Commander, réserver, ou une info ?", "Bonjour ! 👋 Avec plaisir — une commande, une réservation, ou une question ?"]), 380); return; }
+      // sinon : on continue, la demande sera traitée plus bas
     }
-    if (/\b(merci|nickel|super|génial|top|cool)\b/.test(t) && !findMenuItem(t)) { bot(pick(["Avec grand plaisir ! 😊 Autre chose ?", "Je vous en prie ! 🙏"]), 350); return; }
+    if (/\b(merci|nickel|super|genial|top|cool|parfait|geniale)\b/.test(t) && !findMenuItem(t) && !cart.length) { bot(pick(["Avec grand plaisir ! 😊 Autre chose ?", "Je vous en prie ! 🙏"]), 350); return; }
     if (/\b(au revoir|bye|a bientot|bonne (journee|soiree)|ciao)\b/.test(t)) { bot("Merci et à très bientôt ! 👋", 350); return; }
 
     // Retirer un plat / vider le panier (avant d'interpréter comme un ajout)
-    if (cart.length && /\b(enlev|enleve|retir|retire|supprim|vire|degag|j'?en veux plus|finalement (pas|non|sans)|vide le panier|vider)\b/.test(t)) {
+    if (cart.length && /\b(enlev|retir|supprim|vire|degag|j'?en veux plus|finalement (pas|non|sans)|vide le panier|vider)/.test(t)) {
       if (/\b(tout|panier|vide)\b/.test(t) && !findMenuItem(t)) { setCart([]); bot("Panier vidé 🧹 On repart sur quoi ?", 350); return; }
       const it = findMenuItem(t);
       if (it && removeFromCart(it)) { bot(`C'est retiré : ${it.name} ✓`, 300); return; }
@@ -1468,18 +1476,18 @@ function Chatbot({ go, user, restoId, isPublic }) {
     }
 
     // Validation / panier
-    if (cart.length && /\b(valid|c'?est tout|cest tout|termin|fini|finir|j'?ai fini|rien d'?autre|c'?est bon|ca ira|ça ira|paye|commander maintenant|envoie|envoyer|je commande)\b/.test(t)) { startRecap(); return; }
-    if (cart.length && /\b(panier|recap|récap|resume|ma commande|mon panier)\b/.test(t)) { startRecap(); return; }
+    if (cart.length && /\b(valid|c'?est tout|cest tout|termin|fini|rien d'?autre|c'?est bon|ca ira|ça ira|je paye|on paye|commande maintenant|envoi|je commande|ca suffit)/.test(t)) { startRecap(); return; }
+    if (cart.length && /\b(panier|recap|résum|resum|ma commande|mon panier)/.test(t)) { startRecap(); return; }
 
     // Réservation explicite (et pas un plat nommé)
-    if (/\b(reserv|réserv|table|booking|une place|reserver)\b/.test(t) && !findMenuItem(t)) { setFlow("resv_persons"); bot("Avec plaisir ! Pour combien de personnes ? 👥", 450); return; }
+    if (/\b(reserv|table|booking|une place)/.test(t) && !findMenuItem(t)) { setFlow("resv_persons"); bot("Avec plaisir ! Pour combien de personnes ? 👥", 450); return; }
 
     // Question type FAQ posée directement (horaires, adresse, prix…)
     const fa = answerFaq(t);
     if (fa) { bot(fa, 400); return; }
 
     // Suggestion : « surprends-moi », « vous conseillez quoi »
-    if (menu.length && /\b(surprend|au hasard|hasard|suggest|conseil|recommand|le meilleur|specialit|qu'?est-?ce qui est bon|quoi de bon|votre (plat|specialite))\b/.test(t)) {
+    if (menu.length && /\b(surprend|au hasard|hasard|suggest|conseil|recommand|le meilleur|specialit|qu'?est-?ce qui est bon|quoi de bon|votre (plat|specialite)|quoi prendre|que (me )?conseill)/.test(t)) {
       const dispo = menu.filter(i => i.on !== false); const it = pick(dispo.length ? dispo : menu);
       setSelCat(it.cat); bot(`Je vous conseille notre ${it.name} (${priceNum(it.price).toFixed(2)}€) — une valeur sûre ! 😋`, 400);
       setTimeout(() => openCustomizer(it), 460); return;
@@ -1489,12 +1497,12 @@ function Chatbot({ go, user, restoId, isPublic }) {
     if (menu.length && addOrderFromText(txt, null)) return;
 
     // Montrer le menu / indécis
-    if (menu.length && /\b(je (sais|c) pas|sais pas|chai pas|hesit|montre|fais voir|voir (le )?menu|la carte|le menu|vous (avez|proposez|faites) quoi|quoi comme|le choix|les choix|options)\b/.test(t)) {
+    if (menu.length && /\b(je (sais|c) pas|sais pas|chai pas|hesit|montre|fais voir|voir (le )?menu|la carte|le menu|vous (avez|proposez|faites) quoi|quoi comme|le choix|les choix|options)/.test(t)) {
       setFlow("order_cat"); bot("Voici nos catégories, regardez ce qui vous tente 👇", 350); return;
     }
 
     // Intention de commander sans nommer de plat (verbes & argot inclus)
-    if (/\b(command|manger|mange|faim|emporter|emporte|prendre|prend|envie|menu|carte|plat|a boire|boire|graille|graye|bouffe|miam|dej|diner|dîner|snack|il me faut|donne|donnez|ramene|ce sera|j'?aimerais|je veux|j'?voudrais|jvoudrais|jveux)\b/.test(t)) {
+    if (/\b(command|manger|mange|faim|emport|prendre|prend|envie|menu|carte|graille|graye|bouffe|miam|dejeun|diner|dîner|snack|il me faut|donne|ramene|ce sera|j'?aimerais|je veux|j'?voudrais|jvoudrais|jveux|a boire|boire)/.test(t)) {
       if (menu.length === 0) { bot("Le menu n'est pas encore en ligne — appelez-nous, on s'occupe de vous 🙏", 450); return; }
       setFlow("order_cat"); bot(pick(["Avec plaisir ! On commence par quoi ? 👇", "Bien sûr ! Choisissez une catégorie pour voir nos plats 👇"]), 400); return;
     }
