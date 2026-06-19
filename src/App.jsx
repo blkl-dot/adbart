@@ -271,6 +271,7 @@ export default function AdBarth() {
   const [orders, setOrders] = useState([]);
   const [ready, setReady] = useState(false);
   const [publicResto, setPublicResto] = useState(null);
+  const [showGuide, setShowGuide] = useState(false);
   useEffect(() => db.sub(setOrders), []);
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -322,11 +323,12 @@ export default function AdBarth() {
       {page === "landing" && <Landing go={go} />}
       {page === "pricing" && <Pricing go={go} onPick={p => { setPlan(p); go("signup"); }} />}
       {page === "signup" && <Signup go={go} plan={plan} onLogged={applySession} />}
-      {page === "admin" && (locked ? <Renew go={go} user={user} onLogout={logout} /> : <Admin user={user} go={go} onLogout={logout} orders={orders} />)}
+      {page === "admin" && (locked ? <Renew go={go} user={user} onLogout={logout} /> : <Admin user={user} go={go} onLogout={logout} orders={orders} openGuide={() => setShowGuide(true)} />)}
       {page === "simulator" && (locked ? <Renew go={go} user={user} onLogout={logout} /> : <Simulator go={go} user={user} />)}
       {page === "chatbot" && <Chatbot go={go} user={user} restoId={publicResto || user?.id} isPublic={!!publicResto} />}
       {page === "dashboard" && (locked ? <Renew go={go} user={user} onLogout={logout} /> : <Dashboard go={go} orders={orders} user={user} />)}
       {(page === "mentions" || page === "cgv" || page === "confidentialite") && <Legal doc={page} go={go} />}
+      {showGuide && <Guide go={go} onClose={() => setShowGuide(false)} />}
     </div></>
   );
 }
@@ -786,6 +788,7 @@ function PlanCard({ p, onPick }) {
 // ═════════════════════════════════════════════════════════════════════
 function Signup({ go, plan, onLogged }) {
   const [f, setF] = useState({ name:"", email:"", phone:"", resto:"", pass:"", pass2:"" });
+  const [consent, setConsent] = useState(false);
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
   const chosenPlan = plan || PLANS[1];
@@ -796,6 +799,7 @@ function Signup({ go, plan, onLogged }) {
     if (f.pass.length < 6) { setErr("Mot de passe trop court (6 caractères minimum)."); return; }
     const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.email);
     if (!emailOk) { setErr("Adresse email invalide."); return; }
+    if (!consent) { setErr("Vous devez accepter les CGV et la politique de confidentialité."); return; }
     setErr(""); setLoading(true);
     const { data, error } = await supabase.auth.signUp({
       email: f.email.trim(), password: f.pass,
@@ -831,6 +835,10 @@ function Signup({ go, plan, onLogged }) {
           <Field l="Nom de votre restaurant *"><input value={f.resto} onChange={e => setF(v => ({ ...v, resto:e.target.value }))} placeholder="Le Petit Bistrot" style={I} /></Field>
           <Field l="Mot de passe *"><input type="password" value={f.pass} onChange={e => setF(v => ({ ...v, pass:e.target.value }))} placeholder="•••••••• (6 min)" style={I} /></Field>
           <Field l="Confirmer le mot de passe *"><input type="password" value={f.pass2} onChange={e => setF(v => ({ ...v, pass2:e.target.value }))} placeholder="••••••••" style={I} /></Field>
+          <label style={{ display:"flex", gap:11, alignItems:"flex-start", cursor:"pointer", fontSize:12.5, color:MUT, lineHeight:1.6, marginTop:2 }}>
+            <span onClick={() => setConsent(c => !c)} style={{ flexShrink:0, width:22, height:22, borderRadius:7, border:`1.5px solid ${consent ? R : LINE2}`, background: consent ? R : "transparent", display:"flex", alignItems:"center", justifyContent:"center", color:"#fff", fontSize:14, fontWeight:900, transition:`all .18s ${EASE}`, marginTop:1 }}>{consent ? "✓" : ""}</span>
+            <span onClick={() => setConsent(c => !c)}>J'accepte les <span onClick={e => { e.stopPropagation(); go("cgv"); }} style={{ color:"#A89FB0", textDecoration:"underline" }}>CGV</span> et la <span onClick={e => { e.stopPropagation(); go("confidentialite"); }} style={{ color:"#A89FB0", textDecoration:"underline" }}>politique de confidentialité</span>.</span>
+          </label>
           {err && <div style={{ color: err.startsWith("Compte créé") ? V : "#EF4444", fontSize:13, textAlign:"center", padding:"6px 0" }}>{err}</div>}
           <button type="submit" disabled={loading} style={{ padding:"15px", borderRadius:12, background: loading ? "#34293F" : R, color:"#fff", border:"none", fontWeight:800, fontSize:15, cursor: loading ? "not-allowed" : "pointer", marginTop:4, display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}>
             {loading ? <><Spinner /> Création…</> : "Créer mon compte →"}
@@ -845,7 +853,7 @@ function Signup({ go, plan, onLogged }) {
 // ═════════════════════════════════════════════════════════════════════
 // ADMIN
 // ═════════════════════════════════════════════════════════════════════
-function Admin({ user, go, onLogout, orders = [] }) {
+function Admin({ user, go, onLogout, orders = [], openGuide }) {
   const planName = (PLANS.find(p => p.key === user?.plan) || PLANS[0]).name;
   const planPrice = (PLANS.find(p => p.key === user?.plan) || PLANS[0]).price;
   const [tab, setTab] = useState("infos");
@@ -875,6 +883,10 @@ function Admin({ user, go, onLogout, orders = [] }) {
       if (Array.isArray(data.cats) && data.cats.length) setCats(data.cats);
     })();
     return () => { alive = false; };
+  }, []);
+  // Ouvre le guide d'utilisation automatiquement à la toute première connexion
+  useEffect(() => {
+    try { if (openGuide && !localStorage.getItem("adbarth_guide_seen")) { openGuide(); localStorage.setItem("adbarth_guide_seen", "1"); } } catch (e) {}
   }, []);
   const accent = cfg.color;
   const publicLink = (typeof window !== "undefined" && user?.id) ? `${window.location.origin}/?r=${user.id}` : "";
@@ -925,6 +937,7 @@ function Admin({ user, go, onLogout, orders = [] }) {
           <div style={{ fontSize:11, color:MUT, marginTop:3 }}>{cfg.name || user?.resto}</div>
         </div>
         <div style={{ display:"flex", gap:7, alignItems:"center", flexWrap:"wrap" }}>
+          <AdminBtn color={OR} onClick={() => openGuide && openGuide()}>❓ Guide</AdminBtn>
           <AdminBtn color={R} onClick={() => go("simulator")}>📞 Test</AdminBtn>
           <AdminBtn color={V} onClick={() => go("chatbot")}>💬 Chatbot</AdminBtn>
           <AdminBtn color="#3B82F6" onClick={() => go("dashboard")}>🍽️ Cuisine</AdminBtn>
@@ -1516,23 +1529,26 @@ const LEGAL_DOCS = {
       { h: "Finalités", p: "Gérer les comptes, envoyer le SMS suite à un appel manqué, traiter les commandes et réservations, et afficher les commandes en cuisine." },
       { h: "Base légale", p: "Exécution du service et intérêt légitime. Toute prospection commerciale par SMS nécessite le consentement préalable du client." },
       { h: "SMS", p: "Le SMS est envoyé en réponse à un appel du client vers le restaurant. Les numéros ne sont pas utilisés à des fins publicitaires sans consentement explicite." },
-      { h: "Durée de conservation", p: "Les commandes et réservations sont conservées [12 mois par défaut], puis supprimées. Les coordonnées des clients ne sont pas conservées au-delà de cette durée sans consentement." },
-      { h: "Destinataires", p: "Les données sont accessibles au restaurant concerné et aux sous-traitants techniques (hébergement : Vercel, Supabase)." },
-      { h: "Vos droits", p: "Vous disposez d'un droit d'accès, de rectification, d'effacement, de limitation, de portabilité et d'opposition. Pour les exercer : [EMAIL]." },
-      { h: "Réclamation", p: "Vous pouvez introduire une réclamation auprès de la CNIL (www.cnil.fr)." },
-      { h: "Cookies", p: "Le site n'utilise que les technologies strictement nécessaires à son fonctionnement (authentification)." },
+      { h: "Durée de conservation", p: "Les commandes et réservations sont conservées 12 mois, puis supprimées. Les coordonnées des clients finaux ne sont pas conservées au-delà de cette durée sans consentement. Les données du compte restaurateur sont conservées tant que l'abonnement est actif, puis pendant la durée légale applicable." },
+      { h: "Destinataires", p: "Les données sont accessibles au seul restaurant concerné et aux sous-traitants techniques strictement nécessaires (hébergement : Vercel ; base de données et authentification : Supabase, infrastructure située dans l'Union européenne). Aucune donnée n'est revendue ni cédée à des tiers à des fins publicitaires." },
+      { h: "Sécurité des données", p: "Les accès à la base sont protégés par des règles de sécurité au niveau de chaque ligne (RLS) : un restaurateur n'accède qu'à son propre compte et à ses propres commandes, jamais à ceux d'un autre restaurant. Les échanges sont chiffrés (HTTPS), les mots de passe sont hachés (jamais stockés en clair), et l'accès anonyme se limite à la vitrine publique d'un restaurant (menu, horaires) et au dépôt d'une commande." },
+      { h: "Vos droits", p: "Vous disposez d'un droit d'accès, de rectification, d'effacement, de limitation, de portabilité et d'opposition. Pour les exercer, écrivez à [EMAIL] ; une réponse vous sera apportée dans un délai d'un mois." },
+      { h: "Réclamation", p: "Si vous estimez que vos droits ne sont pas respectés, vous pouvez introduire une réclamation auprès de la CNIL (www.cnil.fr)." },
+      { h: "Cookies", p: "Le site n'utilise que les technologies strictement nécessaires à son fonctionnement (cookie d'authentification de votre session). Aucun cookie publicitaire ni traceur tiers n'est déposé : aucune bannière de consentement n'est donc requise." },
     ],
   },
 };
 function Legal({ doc, go }) {
   const d = LEGAL_DOCS[doc] || LEGAL_DOCS.mentions;
+  const needsFilling = d.sections.some(s => /\[[^\]]+\]/.test(s.p));
   return (
     <div style={{ minHeight:"100vh", maxWidth:760, margin:"0 auto" }}>
       <TopBar title={d.title} onBack={() => go("landing")} />
       <div style={{ padding:"24px 20px 60px" }}>
+        {needsFilling && (
         <div style={{ background:`${OR}12`, border:`1px solid ${OR}40`, borderRadius:12, padding:14, marginBottom:24, fontSize:13, color:"#F2ECE4", lineHeight:1.6 }}>
-          ⚠️ Modèle à compléter : remplacez les champs entre crochets […] par vos informations réelles, et faites relire ce document par un professionnel avant la mise en ligne.
-        </div>
+          ⚠️ Avant mise en ligne : remplacez les champs entre crochets […] par vos informations réelles (raison sociale, SIREN, e-mail de contact…) et faites relire ce document par un professionnel.
+        </div>)}
         {d.sections.map((s, i) => (
           <div key={i} style={{ marginBottom:20, paddingLeft:16, borderLeft:`2px solid ${LINE2}` }}>
             {s.h && <h3 style={{ fontFamily:"'Syne',sans-serif", fontSize:17, fontWeight:800, color:"#fff", marginBottom:8 }}>{s.h}</h3>}
@@ -1540,6 +1556,75 @@ function Legal({ doc, go }) {
           </div>
         ))}
         <p style={{ fontSize:12, color:"#6B6378", marginTop:30 }}>Dernière mise à jour : [à compléter].</p>
+      </div>
+    </div>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════
+// GUIDE D'UTILISATION  ·  s'ouvre seul à la 1re connexion + bouton « ❓ Guide »
+// ═════════════════════════════════════════════════════════════════════
+const GUIDE_STEPS = [
+  { i:"🏪", t:"Configurez votre restaurant", d:"Onglet « Restaurant » : nom, téléphone, adresse, horaires et la couleur de votre marque — c'est elle qui habille votre chatbot." },
+  { i:"🍽️", t:"Composez votre menu", d:"Créez vos catégories puis ajoutez vos plats (nom, prix, emoji). Un clic suffit pour activer ou masquer un plat selon le service." },
+  { i:"💬", t:"Personnalisez SMS & chatbot", d:"Onglets « SMS » et « Chatbot » : réglez le message envoyé sur appel manqué et le mot d'accueil. L'aperçu se met à jour en direct." },
+  { i:"🔗", t:"Partagez votre lien client", d:"Onglet « Restaurant » → copiez votre lien unique. Envoyez-le par SMS, transformez-le en QR code sur vos tables, ou mettez-le sur vos réseaux." },
+  { i:"🍳", t:"Recevez en cuisine", d:"Ouvrez « Cuisine » : chaque commande tombe en temps réel avec une sonnerie. Marquez « prêt » d'un geste, votre équipe ne rate plus rien." },
+];
+function Guide({ go, onClose }) {
+  useEffect(() => {
+    const onKey = e => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow; document.body.style.overflow = "hidden";
+    return () => { document.removeEventListener("keydown", onKey); document.body.style.overflow = prev; };
+  }, []);
+  const link = (label, fn) => (
+    <span onClick={fn} style={{ fontSize:13, color:"#A89FB0", cursor:"pointer", textDecoration:"underline", textUnderlineOffset:3 }}
+      onMouseEnter={e => e.currentTarget.style.color = R} onMouseLeave={e => e.currentTarget.style.color = "#A89FB0"}>{label}</span>
+  );
+  return (
+    <div onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+      style={{ position:"fixed", inset:0, zIndex:500, display:"flex", alignItems:"flex-start", justifyContent:"center", padding:"max(16px, 4vh) 16px", overflowY:"auto", background:"rgba(7,5,10,.72)", backdropFilter:"blur(7px)", WebkitBackdropFilter:"blur(7px)" }}>
+      <div className="fu" style={{ position:"relative", width:"100%", maxWidth:560, background:PANEL, border:`1px solid ${LINE2}`, borderRadius:24, boxShadow:`0 40px 90px -34px ${R}66, 0 1px 0 #ffffff0a inset`, overflow:"hidden" }}>
+        {/* en-tête */}
+        <div style={{ position:"relative", padding:"26px 26px 20px", background:`radial-gradient(ellipse 90% 120% at 18% 0%, ${R}26, transparent 60%), radial-gradient(ellipse 80% 120% at 100% 0%, ${V}12, transparent 55%)`, borderBottom:`1px solid ${LINE}` }}>
+          <button type="button" onClick={onClose} title="Fermer" style={{ position:"absolute", top:16, right:16, width:34, height:34, borderRadius:10, background:LINE, border:`1px solid ${LINE2}`, color:TXT, fontSize:16, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>✕</button>
+          <div style={{ fontSize:11, fontWeight:800, color:R, letterSpacing:1.6, textTransform:"uppercase", marginBottom:10 }}>Guide de démarrage</div>
+          <h2 style={{ fontFamily:"'Syne',sans-serif", fontSize:"clamp(23px,5vw,30px)", fontWeight:900, lineHeight:1.08, color:"#fff", letterSpacing:"-1px" }}>
+            Opérationnel en <span className="grad-text">15 minutes.</span>
+          </h2>
+          <p style={{ fontSize:13.5, color:MUT, marginTop:8, lineHeight:1.6 }}>5 étapes pour transformer chaque appel manqué en commande. Suivez-les dans l'ordre, ou revenez quand vous voulez via le bouton <b style={{ color:OR }}>❓ Guide</b>.</p>
+        </div>
+        {/* étapes */}
+        <div style={{ padding:"18px 22px 6px", display:"flex", flexDirection:"column", gap:12 }}>
+          {GUIDE_STEPS.map((s, i) => (
+            <div key={s.t} className="fu" style={{ display:"flex", gap:14, alignItems:"flex-start", animationDelay:`${i * 60}ms`, background:BG2, border:`1px solid ${LINE}`, borderRadius:16, padding:"14px 16px" }}>
+              <div style={{ position:"relative", flexShrink:0 }}>
+                <div style={{ width:44, height:44, borderRadius:13, background:`linear-gradient(135deg,${R}26,${OR}12)`, border:`1px solid ${R}35`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:21 }}>{s.i}</div>
+                <span style={{ position:"absolute", top:-7, left:-7, width:22, height:22, borderRadius:"50%", background:`linear-gradient(135deg,${R},${OR})`, color:"#fff", fontSize:11, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center", boxShadow:`0 4px 10px -3px ${R}99` }}>{i + 1}</span>
+              </div>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ fontSize:14.5, fontWeight:700, color:TXT, marginBottom:3 }}>{s.t}</div>
+                <div style={{ fontSize:13, color:MUT, lineHeight:1.6 }}>{s.d}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+        {/* astuce */}
+        <div style={{ margin:"6px 22px 0", background:`${V}10`, border:`1px solid ${V}3A`, borderRadius:14, padding:"12px 15px", display:"flex", gap:11, alignItems:"flex-start" }}>
+          <span style={{ fontSize:18 }}>⚡</span>
+          <div style={{ fontSize:13, color:"#CFE9DF", lineHeight:1.6 }}>
+            <b style={{ color:V }}>Astuce :</b> testez tout de suite ! Le bouton <b>📞 Test</b> simule un appel manqué → SMS → commande, jusqu'au ticket qui tombe en cuisine.
+          </div>
+        </div>
+        {/* pied */}
+        <div style={{ padding:"18px 22px 22px", display:"flex", flexDirection:"column", gap:14 }}>
+          <PrimaryBtn lg full onClick={onClose}>C'est parti 🚀</PrimaryBtn>
+          <div style={{ display:"flex", gap:18, justifyContent:"center", flexWrap:"wrap" }}>
+            {link("📞 Tester le parcours", () => { onClose(); go("simulator"); })}
+            {link("🔒 Confidentialité", () => { onClose(); go("confidentialite"); })}
+          </div>
+        </div>
       </div>
     </div>
   );
