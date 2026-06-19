@@ -160,6 +160,20 @@ const db = {
 const uid = () => String(Date.now()).slice(-4);
 const now = () => new Date().toLocaleTimeString("fr-FR", { hour:"2-digit", minute:"2-digit" });
 
+// ── Lien client « joli », adapté au restaurant ────────────────────────
+// "Le Petit Bistrot" -> "le-petit-bistrot". On ajoute un court suffixe tiré de
+// l'identifiant pour garantir l'unicité (deux « Bistrot » ne se télescopent pas).
+function slugify(s) {
+  return String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "")
+    .toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40);
+}
+function restoSlug(name, id) {
+  const base = slugify(name) || "resto";
+  const suf = String(id || "").replace(/-/g, "").slice(0, 4) || "0000";
+  return `${base}-${suf}`;
+}
+const isUuid = s => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(s || ""));
+
 // ── CSS global ────────────────────────────────────────────────────────
 const CSS = `
 @import url('https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800;900&family=DM+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap');
@@ -276,7 +290,7 @@ export default function AdBarth() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const rid = params.get("r");
-    if (rid) { setPublicResto(rid); setUserId(rid); setPage("chatbot"); setReady(true); return; }
+    if (rid) { setPublicResto(rid); setPage("chatbot"); setReady(true); return; }
     const justPaid = params.get("paye") === "1";
     if (justPaid) {
       // Nettoie l'URL et re-vérifie l'abonnement après quelques secondes (le temps que SumUp confirme)
@@ -876,11 +890,19 @@ function Admin({ user, go, onLogout, orders = [], openGuide }) {
     let alive = true;
     (async () => {
       if (!user?.id) return;
-      const { data } = await supabase.from("comptes").select("config, menu, cats").eq("id", user.id).single();
+      const { data } = await supabase.from("comptes").select("config, menu, cats, resto").eq("id", user.id).single();
       if (!alive || !data) return;
-      if (data.config) setCfg(c => ({ ...c, ...data.config }));
+      const loaded = data.config || {};
+      const name = loaded.name || data.resto || user.resto || "";
+      const slug = restoSlug(name, user.id);
+      const origin = typeof window !== "undefined" ? window.location.origin : "https://adbarth.fr";
+      const link = `${origin}/?r=${slug}`;
+      setCfg(c => ({ ...c, ...loaded, slug, link }));
       if (Array.isArray(data.menu)) setMenu(data.menu);
       if (Array.isArray(data.cats) && data.cats.length) setCats(data.cats);
+      // Le slug est stocké dans la config (donc visible par la vitrine publique) :
+      // on l'enregistre tout de suite s'il manque, pour que le lien marche sans sauvegarde manuelle.
+      if (loaded.slug !== slug) { try { await supabase.from("comptes").update({ config: { ...loaded, slug, link } }).eq("id", user.id); } catch (e) {} }
     })();
     return () => { alive = false; };
   }, []);
@@ -889,7 +911,7 @@ function Admin({ user, go, onLogout, orders = [], openGuide }) {
     try { if (openGuide && !localStorage.getItem("adbarth_guide_seen")) { openGuide(); localStorage.setItem("adbarth_guide_seen", "1"); } } catch (e) {}
   }, []);
   const accent = cfg.color;
-  const publicLink = (typeof window !== "undefined" && user?.id) ? `${window.location.origin}/?r=${user.id}` : "";
+  const publicLink = (typeof window !== "undefined" && user?.id) ? `${window.location.origin}/?r=${cfg.slug || user.id}` : "";
   const aboFin = user?.aboFin ? new Date(user.aboFin) : null;
   const daysLeft = aboFin ? Math.ceil((aboFin.getTime() - Date.now()) / 86400000) : null;
   useEffect(() => { if (tab === "stats") db.reload(); }, [tab]);
@@ -898,7 +920,14 @@ function Admin({ user, go, onLogout, orders = [], openGuide }) {
   const ca = cmdList.reduce((s, o) => s + (parseFloat(String(o.total).replace(/[^\d.,]/g, "").replace(",", ".")) || 0), 0);
   async function save() {
     try {
-      if (user?.id) await supabase.from("comptes").update({ config: cfg, menu, cats }).eq("id", user.id);
+      if (user?.id) {
+        // Le lien client suit le nom du restaurant
+        const slug = restoSlug(cfg.name || user.resto, user.id);
+        const origin = typeof window !== "undefined" ? window.location.origin : "https://adbarth.fr";
+        const cfg2 = { ...cfg, slug, link: `${origin}/?r=${slug}` };
+        setCfg(cfg2);
+        await supabase.from("comptes").update({ config: cfg2, menu, cats }).eq("id", user.id);
+      }
       setSaved(true); setToast("✓ Modifications enregistrées");
     } catch (e) {
       setToast("⚠️ Échec de l'enregistrement");
@@ -985,8 +1014,8 @@ function Admin({ user, go, onLogout, orders = [], openGuide }) {
             </Field>
           </Card>
           <Card>
-            <div style={{ fontSize:13, fontWeight:700, color:accent, marginBottom:4 }}>🔗 Votre lien client</div>
-            <p style={{ fontSize:12, color:"#8A8295", lineHeight:1.6 }}>C'est le lien à envoyer par SMS. Vos clients l'ouvrent sans compte et commandent directement.</p>
+            <div style={{ fontSize:13, fontWeight:700, color:accent, marginBottom:4 }}>🔗 Votre lien client personnalisé</div>
+            <p style={{ fontSize:12, color:"#8A8295", lineHeight:1.6 }}>À envoyer par SMS. Il porte le nom de votre restaurant — vos clients l'ouvrent sans compte et commandent directement. Il se met à jour automatiquement si vous renommez votre restaurant.</p>
             <div style={{ background:"#130F1A", border:"1px solid #34293F", borderRadius:10, padding:"10px 12px", fontSize:12, color:"#F2ECE4", wordBreak:"break-all", fontFamily:"monospace" }}>{publicLink || "Connectez-vous pour générer votre lien"}</div>
             <div style={{ display:"flex", gap:8 }}>
               <button type="button" onClick={() => { try { navigator.clipboard.writeText(publicLink); setToast("✓ Lien copié"); setTimeout(() => setToast(""), 2000); } catch (e) { setToast("Copie impossible, sélectionnez le lien"); setTimeout(() => setToast(""), 2500); } }} style={{ flex:1, padding:"11px", borderRadius:10, background:accent, color:"#fff", border:"none", fontWeight:700, fontSize:13, cursor:"pointer" }}>📋 Copier le lien</button>
@@ -1177,10 +1206,14 @@ function Chatbot({ go, user, restoId, isPublic }) {
   useEffect(() => {
     let alive = true;
     (async () => {
-      if (isPublic && restoId) setUserId(restoId); // les commandes du client iront vers ce restaurant
       if (!restoId) { setLoadingMenu(false); return; }
-      const { data } = await supabase.from("public_restaurants").select("resto, menu, cats, config").eq("id", restoId).single();
+      // restoId peut être un identifiant (aperçu restaurateur) ou un slug (lien client)
+      let req = supabase.from("public_restaurants").select("id, resto, menu, cats, config");
+      req = isUuid(restoId) ? req.eq("id", restoId) : req.eq("config->>slug", restoId);
+      const { data } = await req.maybeSingle();
       if (!alive) return;
+      // Les commandes du client iront vers le restaurant réellement résolu (identifiant)
+      if (isPublic && data?.id) setUserId(data.id);
       if (Array.isArray(data?.menu)) setMenu(data.menu.filter(i => i.on !== false));
       if (Array.isArray(data?.cats)) setCats(data.cats);
       const conf = data?.config || {};
