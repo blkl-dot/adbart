@@ -1240,12 +1240,13 @@ function Chatbot({ go, user, restoId, isPublic }) {
   function priceNum(p) { return parseFloat(String(p).replace(",", ".")) || 0; }
   // Ajoute un article avec sa personnalisation ; deux fois le même plat avec la
   // même demande → on cumule la quantité ; sinon → deux lignes distinctes.
-  function addToCart(item, custom = "") {
+  function addToCart(item, custom = "", qty = 1) {
+    const add = Math.max(1, Math.min(LIMITS.qty.max, qty));
     const sig = item.id + "|" + custom;
     setCart(cur => {
       const ex = cur.find(c => c.sig === sig);
-      if (ex) return cur.map(c => c.sig === sig ? { ...c, qty: Math.min(LIMITS.qty.max, c.qty + 1) } : c);
-      return [...cur, { lineId: item.id + "-" + uid(), sig, id:item.id, name:item.name, emoji:item.emoji, price:priceNum(item.price), qty:1, custom }];
+      if (ex) return cur.map(c => c.sig === sig ? { ...c, qty: Math.min(LIMITS.qty.max, c.qty + add) } : c);
+      return [...cur, { lineId: item.id + "-" + uid(), sig, id:item.id, name:item.name, emoji:item.emoji, price:priceNum(item.price), qty:add, custom }];
     });
   }
   function changeQty(lineId, delta) {
@@ -1296,80 +1297,155 @@ function Chatbot({ go, user, restoId, isPublic }) {
     bot(`Voici votre commande :\n\n${lines}\n\n💰 Total : ${cartTotal.toFixed(2)}€\n\nJe confirme ?`, 300);
   }
 
-  // Choisit une formulation au hasard (le bot paraît plus vivant, moins robotique)
+  // ── Compréhension du langage naturel (sans serveur, tout côté navigateur) ──
   function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
-  // Repère un plat du menu cité en clair dans la phrase du client
-  function findMenuItem(t) {
-    const norm = s => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
-    const tt = norm(t);
+  const norm = s => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  const NUMWORDS = [["un",1],["une",1],["deux",2],["trois",3],["quatre",4],["cinq",5],["six",6],["sept",7],["huit",8],["neuf",9],["dix",10],["onze",11],["douze",12],["couple",2],["paire",2]];
+  // Un nombre écrit en chiffres OU en lettres dans la phrase (ou null)
+  function numIn(s) {
+    const n = norm(s); const d = n.match(/(\d{1,3})/); if (d) return parseInt(d[1], 10);
+    for (const [w, v] of NUMWORDS) if (new RegExp("\\b" + w + "\\b").test(n)) return v;
+    return null;
+  }
+  function qtyIn(s) { const n = numIn(s); return n ? Math.max(1, Math.min(LIMITS.qty.max, n)) : 1; }
+  const isYes = t => /\b(oui|ouais|ouai|yep|yes|ok|okay|dac|d'?accord|carrement|parfait|nickel|impeccable|confirme|valide|c'?est bon|ca marche|ça marche|go|vas-?y|allez|👍|✅)\b/.test(t);
+  const isNo  = t => /\b(non|nan|no|nope|pas (ca|ça)|plutot|plutôt|modif|change|attend|annul|✏)\b/.test(t);
+
+  // Repère un plat du menu cité en clair (nom complet, ou mot significatif)
+  function findMenuItem(s) {
+    const tt = norm(s);
     return menu.find(i => tt.includes(norm(i.name))) ||
-           menu.find(i => { const w = norm(i.name).split(/\s+/)[0]; return w.length > 2 && tt.includes(w); });
+           menu.find(i => { const w = norm(i.name).split(/\s+/).filter(x => x.length > 2)[0]; return w && tt.includes(w); });
+  }
+  // Ingrédients à retirer cités après « sans … »
+  function sansIn(s) {
+    const out = []; const re = /\bsans\s+([a-zàâäéèêëîïôöùûüç'’ -]{2,24})/g; let m;
+    while ((m = re.exec(norm(s)))) {
+      const ing = m[1].replace(/\b(svp|s'?il vous plait|merci|aussi|le|la|les|du|de la|de|d'?)\b/g, " ").replace(/\s+/g, " ").trim();
+      if (ing) out.push("sans " + ing);
+    }
+    return out.join(" · ");
+  }
+  // Analyse une phrase de commande → [{item, qty, custom}], plusieurs plats gérés
+  function parseOrder(text) {
+    const chunks = norm(text).split(/\bet\b|,|\+|\bpuis\b|;|\bainsi que\b/).map(s => s.trim()).filter(Boolean);
+    const out = [];
+    for (const ch of chunks) {
+      const item = findMenuItem(ch); const sans = sansIn(ch);
+      if (item) out.push({ item, qty: qtyIn(ch), custom: sans });
+      else if (sans && out.length) { out[out.length - 1].custom = [out[out.length - 1].custom, sans].filter(Boolean).join(" · "); } // « …et sans oignon » se rattache au plat précédent
+    }
+    if (!out.length) { const item = findMenuItem(text); if (item) out.push({ item, qty: qtyIn(text), custom: sansIn(text) }); }
+    return out;
+  }
+  // Ajoute au panier ce qui a été compris dans la phrase ; renvoie false si rien trouvé
+  function addOrderFromText(text, lead) {
+    const parsed = parseOrder(text);
+    if (!parsed.length) return false;
+    // Un seul plat, personnalisable, sans précision → on propose les options (plus humain)
+    if (parsed.length === 1 && parsed[0].qty === 1 && !parsed[0].custom && ingList(parsed[0].item).length > 0) {
+      const it = parsed[0].item; setSelCat(it.cat); setFlow("order_items");
+      bot(pick([`Excellent choix, le ${it.name} ! Je vous le prépare comment ? 😋`, `Ah, le ${it.name}, très bon choix ! Une préférence ?`]), 360);
+      setTimeout(() => openCustomizer(it), 420);
+      return true;
+    }
+    parsed.forEach(p => addToCart(p.item, p.custom, p.qty));
+    const desc = parsed.map(p => `${p.qty}× ${p.item.name}${p.custom ? " (" + p.custom + ")" : ""}`).join(", ");
+    setSelCat(parsed[parsed.length - 1].item.cat); setFlow("order_items");
+    bot(`${lead ? lead + " " : "C'est noté ✍️ "}${desc} — ajouté au panier.\nAutre chose, ou je valide ? (dites « valider » ✅)`, 360);
+    return true;
+  }
+  // Répond à une question courante (horaires, adresse, prix…) ou renvoie null
+  function answerFaq(t) {
+    const h1 = cfg?.hours1 || "12:00 – 14:30", h2 = cfg?.hours2 || "19:00 – 23:30";
+    if (/\b(horaire|ouvert|ouvre|ferme|ferme|heure|quand)\b/.test(t)) return `🕐 Nos horaires : midi ${h1}, soir ${h2}.`;
+    if (/\b(adresse|ou (etes|se trouve|est)|ou vous|localis|situe|venir|plan|itinerair)\b/.test(t)) return cfg?.address ? `📍 Nous sommes au ${cfg.address}.` : "📍 Appelez-nous pour l'adresse exacte 🙏";
+    if (/\b(telephone|numero|appeler|joindre|contact|portable)\b/.test(t)) return cfg?.phone ? `📞 Notre numéro : ${cfg.phone}.` : "📞 Vous pouvez passer commande directement ici 🙂";
+    if (/\b(livr|livraison|livrer|domicile|deliveroo|uber)\b/.test(t)) return "🛵 Pas de livraison pour l'instant — mais la commande à emporter est dispo ici !";
+    if (/\b(emporter|emporte|a emporter|sur place|take ?away|click)\b/.test(t)) return "🥡 C'est à emporter : commandez ici, puis venez récupérer 👍";
+    if (/\b(allerg|gluten|vegan|vegetarien|vegetar|halal|porc|sans porc|lactose|noix|arachide)\b/.test(t)) return "⚠️ Pour une allergie ou un régime, indiquez-le dans la commande (option « sans » ou demande libre) — on en tient compte.";
+    if (/\b(paie|payer|carte|espece|cb|ticket ?resto|liquide|sumup)\b/.test(t)) return "💳 Le paiement se fait au restaurant, au moment de récupérer la commande.";
+    if (/\b(prix|tarif|combien|coute|coute|cher)\b/.test(t)) { const it = findMenuItem(t); if (it) return `💶 Le ${it.name} est à ${priceNum(it.price).toFixed(2)}€.`; return "💶 Tous les prix sont indiqués sur le menu, par catégorie 👇"; }
+    return null;
   }
 
   function proc(txt) {
-    const t = txt.toLowerCase();
-    if (flow === "welcome" || flow === "intent") {
-      // Politesse — on répond comme un vrai serveur
-      if (/^(bonjour|bonsoir|salut|coucou|hello|hey|yo)\b/.test(t.trim())) {
-        bot(pick([`Bonsoir ! 😊 Ravi de vous accueillir. Vous voulez commander, réserver une table, ou des infos ?`, `Bonjour ! 👋 Avec plaisir. Une commande à emporter, une réservation, ou une question ?`]), 380); return;
-      }
-      if (t.includes("merci")) { bot(pick(["Avec grand plaisir ! 😊", "Je vous en prie ! 🙏 Autre chose ?"]), 350); return; }
-      // Le client nomme un plat directement → on le propose tout de suite
-      const cited = findMenuItem(t);
-      if (cited && (t.includes("command") || t.includes("veux") || t.includes("voudrais") || t.includes("prend") || t.includes("manger") || t.includes("envie") || cited)) {
-        setFlow("order_items"); setSelCat(cited.cat);
-        bot(pick([`Excellent choix, le ${cited.name} ! 😋 Je vous le prépare comment ?`, `Ah, le ${cited.name}, très bon choix ! Une préférence pour le préparer ?`]), 360);
-        setTimeout(() => openCustomizer(cited), 420);
-        return;
-      }
-      if (t.includes("command") || t.includes("emport") || t.includes("🍔") || t.includes("manger") || t.includes("faim")) {
-        if (menu.length === 0) { bot("Le menu n'est pas encore en ligne — appelez-nous directement, on s'occupe de vous 🙏", 450); return; }
-        setFlow("order_cat"); bot(pick(["Avec plaisir ! On commence par quoi ? 👇", "Bien sûr ! Choisissez une catégorie pour voir nos plats 👇"]), 400);
-      }
-      else if (t.includes("réserv") || t.includes("table") || t.includes("📅")) { setFlow("resv_persons"); bot("Avec plaisir ! Pour combien de personnes ? 👥", 450); }
-      else if (t.includes("info") || t.includes("horaire") || t.includes("❓")) { setFlow("faq"); bot("Bien sûr, sur quoi puis-je vous renseigner ?", 450); }
-      else { bot("Je peux vous aider à 🍔 commander, 📅 réserver une table, ou ❓ répondre à vos questions. Que souhaitez-vous ?", 400); }
-      return;
+    const t = norm(txt);
+
+    // ── Commandes universelles (n'importe quand) ──
+    if (/\b(recommenc|on recommence|reset|repart|tout (effac|annul|recommenc)|efface tout|reinitialis)\b/.test(t)) {
+      setCart([]); setResv({}); setSelCat(null); setCustomizing(null); setFlow("intent");
+      bot("C'est reparti de zéro 🔄 Vous voulez commander, réserver, ou une info ?", 300); return;
     }
+
+    // ── Confirmation de commande ──
     if (flow === "order_confirm") {
-      if (t.includes("confirm") || t.includes("oui") || t.includes("✅") || t.includes("ok")) { confirmOrder(); }
-      else if (t.includes("modif") || t.includes("✏") || t.includes("non")) { setFlow("order_items"); bot("D'accord, modifiez votre panier 👇", 300); }
-      return;
+      if (isYes(t)) { confirmOrder(); return; }
+      if (isNo(t) || t.includes("modif")) { setFlow("order_items"); bot("D'accord, ajustez votre panier 👇", 300); return; }
+      if (addOrderFromText(txt, "Et avec ça :")) return; // le client rajoute un plat pendant la confirmation
+      bot("Je valide la commande ? Répondez « oui » ✅ ou « modifier » ✏️", 350); return;
     }
+
+    // ── Réservation : étapes ──
     if (flow === "resv_persons") {
-      const num = clampInt(txt, LIMITS.persons.min, LIMITS.persons.max);
-      const raw = parseInt(String(txt).replace(/[^\d]/g, ""), 10);
-      if (!isNaN(raw) && raw > LIMITS.persons.max) { bot(`Pour un groupe de plus de ${LIMITS.persons.max} personnes, merci d'appeler directement le restaurant 🙏`, 450); return; }
-      if (num) { setResv(r => ({ ...r, persons:num })); setFlow("resv_date"); bot(`Parfait, table pour ${num} 👍\nPour quelle date ? (ex: ce soir, demain…)`, 500); }
-      else { bot("Combien de personnes serez-vous ? (ex: 2, 4…)", 400); }
+      const n = numIn(txt);
+      if (n !== null && n > LIMITS.persons.max) { bot(`Pour un groupe de plus de ${LIMITS.persons.max} personnes, appelez-nous directement 🙏`, 450); return; }
+      if (n && n >= LIMITS.persons.min) { setResv(r => ({ ...r, persons:n })); setFlow("resv_date"); bot(`Parfait, table pour ${n} 👍\nPour quelle date ? (ex : ce soir, demain, samedi…)`, 500); }
+      else { bot("Combien de personnes serez-vous ? (ex : 2, 4…)", 400); }
       return;
     }
-    if (flow === "resv_date") { setResv(r => ({ ...r, date:sanitizeText(txt, 40) })); setFlow("resv_time"); bot("À quelle heure souhaitez-vous venir ?", 500); return; }
-    if (flow === "resv_time") { setResv(r => ({ ...r, time:sanitizeText(txt, 30) })); setFlow("resv_note"); bot("Une note ? (allergie, occasion…) Ou tapez \"non\".", 500); return; }
+    if (flow === "resv_date") { setResv(r => ({ ...r, date:sanitizeText(txt, 40) })); setFlow("resv_time"); bot("Très bien ! À quelle heure souhaitez-vous venir ?", 500); return; }
+    if (flow === "resv_time") { setResv(r => ({ ...r, time:sanitizeText(txt, 30) })); setFlow("resv_note"); bot("Une note ? (allergie, occasion spéciale…) Sinon tapez « non ».", 500); return; }
     if (flow === "resv_note") {
-      const note = (t === "non" || t === "rien") ? "" : sanitizeText(txt, LIMITS.note);
+      const note = /\b(non|nan|rien|aucun)\b/.test(t) ? "" : sanitizeText(txt, LIMITS.note);
       const r2 = { ...resv, note }; setResv(r2); setFlow("resv_confirm");
       setTimeout(() => bot(`Récapitulatif :\n\n📅 ${r2.date} à ${r2.time}\n👥 ${r2.persons} personne${r2.persons > 1 ? "s" : ""}${r2.note ? "\n📝 " + r2.note : ""}\n\nTout est correct ?`, 500), 0);
       return;
     }
     if (flow === "resv_confirm") {
-      if (t.includes("confirm") || t.includes("oui") || t.includes("✅") || t.includes("ok")) { confirmResv(); }
-      else if (t.includes("modif") || t.includes("non") || t.includes("✏")) { setResv({}); setFlow("resv_persons"); bot("Pas de problème ! Pour combien de personnes ?", 400); }
-      return;
+      if (isYes(t)) { confirmResv(); return; }
+      if (isNo(t)) { setResv({}); setFlow("resv_persons"); bot("Pas de souci ! Reprenons : pour combien de personnes ?", 400); return; }
+      bot("Je confirme la réservation ? « oui » ✅ ou « modifier » ✏️", 350); return;
     }
+
+    // ── FAQ (ou question posée n'importe quand) ──
     if (flow === "faq") {
-      const h1 = cfg?.hours1 || "12:00 – 14:30", h2 = cfg?.hours2 || "19:00 – 23:30";
-      if (t.includes("horaire") || t.includes("ouvert")) { bot(`🕐 Midi : ${h1} / Soir : ${h2} · 7j/7`, 400); }
-      else if (t.includes("livr")) { bot("🛵 Pas de livraison pour le moment, mais commande à emporter possible !", 400); }
-      else if (t.includes("allerg")) { bot("⚠️ Précisez votre allergie lors de la commande.", 400); }
-      else if (t.includes("retour") || t.includes("↩")) { setFlow("intent"); bot("D'accord ! Commander ou réserver ?", 400); }
-      else { bot("Pour toute autre question, appelez-nous ! 😊", 400); }
-      return;
+      if (/\b(retour|menu|commander|reserv|↩)\b/.test(t)) { setFlow("intent"); bot("D'accord ! Commander 🍔, réserver 📅, ou une autre question ?", 400); return; }
+      bot(answerFaq(t) || "Bonne question ! Pour ce point précis, le mieux est de nous appeler 😊 Autre chose ?", 400); return;
     }
-    // Dernier recours : le client a peut-être nommé un plat
-    const cited = findMenuItem(t);
-    if (cited) { setFlow("order_items"); setSelCat(cited.cat); bot(`Vous voulez dire le ${cited.name} ? 😋`, 350); setTimeout(() => openCustomizer(cited), 420); return; }
-    bot(pick(["Pardon, je n'ai pas tout saisi 🙈 Vous pouvez reformuler, ou utiliser les boutons ci-dessous.", "Hmm, je ne suis pas sûr d'avoir compris. Dites-moi : commander, réserver, ou une question ?"]), 400);
+
+    // ── Accueil / commande en cours / intention libre ──
+    if (/^(bonjour|bonsoir|salut|coucou|hello|hey|yo|bjr|cc|wesh)\b/.test(t)) {
+      bot(pick(["Bonsoir ! 😊 Ravi de vous accueillir. Commander, réserver, ou une info ?", "Bonjour ! 👋 Avec plaisir — une commande, une réservation, ou une question ?"]), 380); return;
+    }
+    if (/\b(merci|nickel|super|génial|top|cool)\b/.test(t) && !findMenuItem(t)) { bot(pick(["Avec grand plaisir ! 😊 Autre chose ?", "Je vous en prie ! 🙏"]), 350); return; }
+    if (/\b(au revoir|bye|a bientot|bonne (journee|soiree))\b/.test(t)) { bot("Merci et à très bientôt ! 👋", 350); return; }
+
+    // Validation / panier
+    if (cart.length && /\b(valid|c'?est tout|cest tout|termin|fini|finir|j'?ai fini|rien d'?autre|c'?est bon|ca ira|ça ira|paye|commander maintenant)\b/.test(t)) { startRecap(); return; }
+    if (cart.length && /\b(panier|recap|récap|resume|ma commande)\b/.test(t)) { startRecap(); return; }
+
+    // Réservation explicite (et pas un plat nommé)
+    if (/\b(reserv|réserv|table|booking|une place|reserver)\b/.test(t) && !findMenuItem(t)) { setFlow("resv_persons"); bot("Avec plaisir ! Pour combien de personnes ? 👥", 450); return; }
+
+    // Question type FAQ posée directement
+    const fa = answerFaq(t);
+    if (fa) { bot(fa, 400); return; }
+
+    // Commande comprise depuis le texte (plusieurs plats, quantités, « sans … »)
+    if (menu.length && addOrderFromText(txt, null)) return;
+
+    // Intention de commander sans nommer de plat
+    if (/\b(command|manger|faim|emporter|prendre|envie|menu|carte|plat|a boire|boire)\b/.test(t)) {
+      if (menu.length === 0) { bot("Le menu n'est pas encore en ligne — appelez-nous, on s'occupe de vous 🙏", 450); return; }
+      setFlow("order_cat"); bot(pick(["Avec plaisir ! On commence par quoi ? 👇", "Bien sûr ! Choisissez une catégorie pour voir nos plats 👇"]), 400); return;
+    }
+
+    // Dernier recours : on propose, on ne bloque jamais
+    bot(pick([
+      "Je veux être sûr de bien comprendre 🙂 Vous souhaitez : 🍔 commander, 📅 réserver, ou ❓ une info ? Vous pouvez aussi écrire directement, ex : « 2 burgers sans oignon ».",
+      "Pas de souci — dites-moi simplement ce que vous voulez manger (ex : « un menu et une boisson »), réserver une table, ou poser une question 😊",
+    ]), 420);
   }
   function confirmOrder() {
     const items = cart.map(c => `${c.qty}× ${c.name}${c.custom ? " (" + c.custom + ")" : ""}`);
