@@ -1404,6 +1404,33 @@ function Chatbot({ go, user, restoId, isPublic }) {
     return null;
   }
 
+  // Repère une CATÉGORIE citée (« salades », « les plats », « desserts »…), pluriel toléré
+  function findCategory(t) {
+    const tt = norm(t);
+    const cands = (cats && cats.length ? cats : [...new Set(menu.map(i => i.cat))]).filter(Boolean);
+    for (const c of cands) {
+      const cn = norm(c); if (cn.length < 3) continue;
+      if (!menu.some(i => i.cat === c && i.on !== false)) continue; // catégorie vide → on ignore
+      const sing = cn.replace(/s$/, "");
+      if (tt.includes(cn) || (sing.length > 2 && tt.includes(sing))) return c;
+    }
+    return null;
+  }
+  // Plats dont le nom contient un mot demandé (« des salades » → toutes les salades)
+  function browseItems(t) {
+    const toks = norm(t).split(/[^a-z0-9]+/).filter(w => w.length > 3).map(w => w.replace(/s$/, ""));
+    if (!toks.length) return [];
+    return menu.filter(i => i.on !== false && norm(i.name).split(/\s+/).some(w => {
+      const ws = w.replace(/s$/, ""); return ws.length > 2 && toks.some(tk => ws.includes(tk) || tk.includes(ws) || lev(ws, tk) <= 1);
+    }));
+  }
+  // Affiche une liste de plats dans le chat (et active leur affichage cliquable)
+  function showList(cat, list) {
+    setSelCat(cat || list[0].cat); setFlow("order_items");
+    const lines = list.slice(0, 14).map(i => `• ${i.name} — ${priceNum(i.price).toFixed(2)}€`).join("\n");
+    bot(`Oui 😋 Voici ${cat ? "nos " + cat.toLowerCase() : "ce qui correspond"} :\n${lines}\n\nDites-moi simplement lequel vous voulez (tapez son nom, ou « 2 ${list[0].name} »), ou touchez « Ajouter » 👇`, 400);
+  }
+
   function proc(txt) {
     const t = norm(txt);
 
@@ -1491,6 +1518,19 @@ function Chatbot({ go, user, restoId, isPublic }) {
       const dispo = menu.filter(i => i.on !== false); const it = pick(dispo.length ? dispo : menu);
       setSelCat(it.cat); bot(`Je vous conseille notre ${it.name} (${priceNum(it.price).toFixed(2)}€) — une valeur sûre ! 😋`, 400);
       setTimeout(() => openCustomizer(it), 460); return;
+    }
+
+    // « y a des salades ? », « les plats ? », « vous avez quoi en dessert » → on LISTE
+    // la catégorie/type demandé (sauf si c'est clairement une commande chiffrée).
+    const orderSignal = numIn(txt) !== null || /\b(je veux|voudrais|prend|ajoute|rajoute|mets|donne|ramene|sans )/.test(t);
+    if (menu.length && !orderSignal) {
+      const named = menu.find(i => norm(t).includes(norm(i.name))); // a nommé un plat précis en entier
+      if (!named) {
+        const cat = findCategory(t);
+        const browseSignal = /\b(y a|y'?a|il y a|avez|propos|faites|c'?est quoi|quel|quelle|des |les |du |montre|voir|liste|comme (entree|plat|dessert|boisson|salade|menu)|en (entree|plat|dessert|boisson))/.test(t);
+        const list = cat ? menu.filter(i => i.cat === cat && i.on !== false) : (browseSignal ? browseItems(t) : []);
+        if (list.length) { showList(cat, list); return; }
+      }
     }
 
     // Commande comprise depuis le texte (plusieurs plats, quantités, « sans … »)
