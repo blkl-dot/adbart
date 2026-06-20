@@ -2,7 +2,7 @@
 
 Un client **appelle** le restaurant. Une **IA vocale** décroche, dit bonjour, présente
 la carte, prend la commande en français — et la commande **tombe en cuisine**
-exactement comme une commande du chatbot. Réservé à l'abonnement **Premium**.
+exactement comme une commande du chatbot. Inclus à partir de l'abonnement **Pro** (et **Premium**).
 
 ```
 Client appelle ──▶ Twilio ──▶ Edge Function "assistant-vocal" ──▶ Claude (Opus 4.8)
@@ -17,7 +17,7 @@ Client appelle ──▶ Twilio ──▶ Edge Function "assistant-vocal" ──
 - **`supabase/functions/assistant-vocal/index.ts`** — la fonction qui répond aux appels.
 - **`db/02_assistant_vocal.sql`** — la table `vocal_appels` (mémoire + journal des appels).
 - **Côté site** — onglet **Admin → Chatbot → « 📞 Assistant vocal téléphonique »**
-  (visible uniquement en Premium) : interrupteur + champ « Numéro vocal ».
+  (visible à partir du plan Pro) : interrupteur + champ « Numéro vocal ».
 - L'offre **Premium** mentionne le standard téléphonique IA sur la page tarifs.
 
 Il reste **3 branchements** (clés + numéro), décrits ci-dessous.
