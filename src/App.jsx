@@ -382,6 +382,7 @@ export default function AdBarth() {
       {page === "signup" && <Signup go={go} plan={plan} onLogged={applySession} />}
       {page === "admin" && (locked ? <Renew go={go} user={user} onLogout={logout} /> : <Admin user={user} go={go} onLogout={logout} orders={orders} openGuide={() => setShowGuide(true)} />)}
       {page === "simulator" && (locked ? <Renew go={go} user={user} onLogout={logout} /> : <Simulator go={go} user={user} />)}
+      {page === "vocalsim" && (locked ? <Renew go={go} user={user} onLogout={logout} /> : <VocalSim go={go} user={user} restoId={publicResto || user?.id} />)}
       {page === "chatbot" && <Chatbot go={go} user={user} restoId={publicResto || user?.id} isPublic={!!publicResto} />}
       {page === "dashboard" && (locked ? <Renew go={go} user={user} onLogout={logout} /> : <Dashboard go={go} orders={orders} user={user} />)}
       {(page === "mentions" || page === "cgv" || page === "confidentialite") && <Legal doc={page} go={go} />}
@@ -1011,7 +1012,8 @@ function Admin({ user, go, onLogout, orders = [], openGuide }) {
         </div>
         <div style={{ display:"flex", gap:7, alignItems:"center", flexWrap:"wrap" }}>
           <AdminBtn color={OR} onClick={() => openGuide && openGuide()}>❓ Guide</AdminBtn>
-          <AdminBtn color={R} onClick={() => go("simulator")}>📞 Test</AdminBtn>
+          <AdminBtn color={R} onClick={() => go("simulator")}>📞 Test SMS</AdminBtn>
+          <AdminBtn color="#8B5CF6" onClick={() => go("vocalsim")}>🎙️ Test vocal</AdminBtn>
           <AdminBtn color={V} onClick={() => go("chatbot")}>💬 Chatbot</AdminBtn>
           <AdminBtn color="#3B82F6" onClick={() => go("dashboard")}>🍽️ Cuisine</AdminBtn>
           <AdminBtn color="#A89FB0" onClick={onLogout}>⏻ Déco</AdminBtn>
@@ -1239,6 +1241,177 @@ function Simulator({ go, user }) {
         {phase === "sms" && (<div className="fu" style={{ width:"100%", background:"#181320", border:`1px solid ${V}40`, borderRadius:16, padding:16 }}><div style={{ fontSize:10, fontWeight:700, color:V, letterSpacing:1.2, marginBottom:10 }}>SMS REÇU PAR LE CLIENT</div><div style={{ background:"#130F1A", borderRadius:"16px 16px 16px 4px", padding:"13px 16px", fontSize:14, lineHeight:1.8, color:"#F2ECE4", border:"1px solid #241D2F" }}>Bonjour ! Nous n'avons pas pu répondre à votre appel. Cliquez ici pour commander ou réserver 👉 <span onClick={() => go("chatbot")} style={{ color:R, textDecoration:"underline", cursor:"pointer", fontWeight:700 }}>Ouvrir le chatbot →</span></div></div>)}
         {phase === "idle" && <PrimaryBtn lg full onClick={start}>📞 Simuler un appel manqué</PrimaryBtn>}
         {phase === "sms" && (<><PrimaryBtn lg full onClick={() => go("chatbot")}>💬 Cliquer sur le lien (voir le chatbot) →</PrimaryBtn><GhostBtn full onClick={() => setPhase("idle")}>Recommencer</GhostBtn></>)}
+      </div>
+    </div>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════
+// SIMULATEUR D'APPEL VOCAL (assistant téléphonique IA) — version TEST
+// Sans Twilio ni clé : l'assistant PARLE (synthèse vocale du navigateur),
+// le client répond par boutons/texte, la commande tombe en cuisine.
+// ═════════════════════════════════════════════════════════════════════
+function VocalSim({ go, user, restoId }) {
+  const [menu, setMenu] = useState([]);
+  const [cats, setCats] = useState([]);
+  const [cfg, setCfg] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [phase, setPhase] = useState("idle"); // idle · calling · live · done
+  const [log, setLog] = useState([]);          // {who:'bot'|'usr', t}
+  const [cart, setCart] = useState([]);        // {name, price, qty}
+  const [input, setInput] = useState("");
+  const restoName = cfg?.name || user?.resto || "notre restaurant";
+  const scrollRef = useRef(null);
+
+  // Charge la vraie carte du restaurant (vue publique)
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const id = restoId || user?.id;
+      if (!id) { setLoading(false); return; }
+      let req = supabase.from("public_restaurants").select("id, resto, menu, cats, config");
+      req = isUuid(id) ? req.eq("id", id) : req.eq("config->>slug", id);
+      const { data } = await req.maybeSingle();
+      if (!alive) return;
+      if (data) {
+        setCfg({ ...(data.config || {}), name: data.resto });
+        setMenu(Array.isArray(data.menu) ? data.menu.filter(i => i && i.on !== false && i.name) : []);
+        setCats(Array.isArray(data.cats) && data.cats.length ? data.cats : []);
+      }
+      setLoading(false);
+    })();
+    return () => { alive = false; window.speechSynthesis?.cancel(); };
+  }, [restoId, user]);
+
+  useEffect(() => { scrollRef.current?.scrollTo({ top: 1e9, behavior: "smooth" }); }, [log]);
+
+  // L'assistant parle à voix haute (français) + écrit dans le transcript.
+  function say(t) {
+    setLog(l => [...l, { who: "bot", t }]);
+    try {
+      const u = new SpeechSynthesisUtterance(t);
+      u.lang = "fr-FR"; u.rate = 1.04;
+      const v = window.speechSynthesis?.getVoices?.().find(v => /fr/i.test(v.lang));
+      if (v) u.voice = v;
+      window.speechSynthesis?.cancel();
+      window.speechSynthesis?.speak(u);
+    } catch (e) {}
+  }
+  function heard(t) { setLog(l => [...l, { who: "usr", t }]); }
+
+  const total = cart.reduce((s, c) => s + (Number(String(c.price).replace(",", ".")) || 0) * c.qty, 0);
+  const grouped = (cats.length ? cats : [...new Set(menu.map(i => i.cat))]).map(c => ({ c, items: menu.filter(i => i.cat === c) })).filter(g => g.items.length);
+
+  function addItem(it) {
+    heard(`Je voudrais ${it.name}.`);
+    setCart(p => {
+      const ex = p.find(c => c.name === it.name);
+      if (ex) return p.map(c => c.name === it.name ? { ...c, qty: c.qty + 1 } : c);
+      return [...p, { name: it.name, price: it.price, qty: 1 }];
+    });
+    say(`C'est noté, ${it.name}. Avec ceci ?`);
+  }
+
+  // Reconnaissance simple du texte tapé (« 2 burgers et un coca »)
+  function submitText() {
+    const t = input.trim(); if (!t) return;
+    setInput(""); heard(t);
+    const norm = s => String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+    const tx = norm(t);
+    if (/(c'?est tout|termin|fini|valid|confirm|rien d'?autre)/.test(tx)) { finish(); return; }
+    let found = 0;
+    menu.forEach(it => {
+      const name = norm(it.name);
+      if (name && tx.includes(name)) {
+        const m = tx.match(new RegExp("(\\d+)\\s*(?:x|fois)?\\s*" + name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+        const qty = m ? Math.max(1, parseInt(m[1])) : 1;
+        found++;
+        setCart(p => { const ex = p.find(c => c.name === it.name); return ex ? p.map(c => c.name === it.name ? { ...c, qty: c.qty + qty } : c) : [...p, { name: it.name, price: it.price, qty }]; });
+      }
+    });
+    if (found) say("C'est noté. Souhaitez-vous autre chose ?");
+    else say("Pardon, je n'ai pas trouvé ce plat sur notre carte. Vous pouvez toucher un plat ci-dessous ou répéter.");
+  }
+
+  function startCall() {
+    setPhase("calling"); setCart([]); setLog([]);
+    setTimeout(() => {
+      setPhase("live");
+      say(`Bonjour et bienvenue chez ${restoName}. Je suis votre assistant et je prends votre commande. Que souhaitez-vous ?`);
+    }, 1500);
+  }
+
+  function finish() {
+    if (!cart.length) { say("Votre panier est vide pour l'instant. Que souhaitez-vous commander ?"); return; }
+    const items = cart.map(c => `${c.qty}× ${c.name}`);
+    const ref = "TEL-" + uid();
+    db.add({ id: ref, client: "📞 Téléphone (simulation)", type: "commande", items, total: `${total.toFixed(2)}€`, time: now(), status: "en_cours", note: "📞 Commande par téléphone — assistant vocal (SIMULATION)" });
+    say(`Parfait. Je récapitule : ${items.join(", ")}. Cela fait ${total.toFixed(2)} euros. Votre commande est transmise en cuisine. Merci et à bientôt !`);
+    setPhase("done");
+  }
+
+  if (loading) return <div style={{ minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", background:BG }}><Spinner /></div>;
+
+  return (
+    <div style={{ minHeight:"100vh", display:"flex", flexDirection:"column", maxWidth:480, margin:"0 auto" }}>
+      <TopBar title="Test assistant vocal" sub="Simulation — l'assistant parle, vous commandez" onBack={() => { window.speechSynthesis?.cancel(); go(user ? "admin" : "landing"); }} />
+      <div style={{ flex:1, display:"flex", flexDirection:"column", padding:16, gap:14 }}>
+        <div style={{ background:`linear-gradient(135deg, ${R}14, transparent)`, border:`1px solid ${R}33`, borderRadius:14, padding:"12px 14px", fontSize:12.5, color:"#A89FB0", lineHeight:1.6 }}>
+          🎙️ Démo <b style={{ color:R }}>Premium</b> sans téléphone réel : l'assistant <b>parle à voix haute</b> et prend la commande sur votre vraie carte. La commande tombe en <b>Cuisine</b>, comme un vrai appel. <span style={{ color:"#6B6378" }}>(activez le son)</span>
+        </div>
+
+        {phase === "idle" && (
+          <div style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:22 }}>
+            <div style={{ width:120, height:120, borderRadius:"50%", background:`linear-gradient(135deg,${R},${OR})`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:52, boxShadow:`0 16px 40px -10px ${R}88` }}>📞</div>
+            {!menu.length ? <p style={{ color:MUT, fontSize:14, textAlign:"center" }}>Ajoutez d'abord des plats à votre menu pour tester.</p> :
+            <PrimaryBtn lg full onClick={startCall}>📞 Appeler l'assistant vocal</PrimaryBtn>}
+          </div>
+        )}
+
+        {phase === "calling" && (
+          <div style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:18 }}>
+            <div style={{ width:120, height:120, borderRadius:"50%", background:`linear-gradient(135deg,${R},${OR})`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:52, animation: RM?"none":"ring .42s ease-in-out infinite" }}>📞</div>
+            <span style={{ color:R, fontWeight:700 }}>Connexion à l'assistant…</span>
+          </div>
+        )}
+
+        {(phase === "live" || phase === "done") && (<>
+          <div ref={scrollRef} style={{ flex:1, overflowY:"auto", display:"flex", flexDirection:"column", gap:10, padding:"4px 2px", minHeight:160 }}>
+            {log.map((m, i) => (
+              <div key={i} style={{ alignSelf: m.who === "bot" ? "flex-start" : "flex-end", maxWidth:"82%", background: m.who === "bot" ? "#181320" : `linear-gradient(135deg,${R},${OR})`, color: m.who === "bot" ? "#F2ECE4" : "#fff", border: m.who === "bot" ? "1px solid #241D2F" : "none", borderRadius: m.who === "bot" ? "14px 14px 14px 4px" : "14px 14px 4px 14px", padding:"10px 14px", fontSize:14, lineHeight:1.5 }}>
+                {m.who === "bot" && <span style={{ fontSize:10, fontWeight:800, color:R, display:"block", marginBottom:3 }}>🎙️ ASSISTANT</span>}
+                {m.t}
+              </div>
+            ))}
+          </div>
+
+          {cart.length > 0 && (
+            <div style={{ background:"#130F1A", border:`1px solid ${V}40`, borderRadius:12, padding:"10px 14px" }}>
+              <div style={{ fontSize:10, fontWeight:800, color:V, letterSpacing:1, marginBottom:6 }}>PANIER</div>
+              {cart.map((c, i) => <div key={i} style={{ display:"flex", justifyContent:"space-between", fontSize:13, padding:"2px 0" }}><span>{c.qty}× {c.name}</span><span style={{ color:MUT }}>{((Number(String(c.price).replace(",", "."))||0)*c.qty).toFixed(2)}€</span></div>)}
+              <div style={{ display:"flex", justifyContent:"space-between", fontSize:14, fontWeight:800, marginTop:6, paddingTop:6, borderTop:"1px solid #241D2F" }}><span>Total</span><span style={{ color:V }}>{total.toFixed(2)}€</span></div>
+            </div>
+          )}
+
+          {phase === "live" && (<>
+            <div style={{ display:"flex", flexWrap:"wrap", gap:7, maxHeight:170, overflowY:"auto" }}>
+              {grouped.map(g => g.items.map(it => (
+                <button key={it.id || it.name} onClick={() => addItem(it)} style={{ padding:"8px 13px", borderRadius:20, background:`${R}14`, border:`1px solid ${R}44`, color:"#F2ECE4", fontSize:12.5, fontWeight:600, cursor:"pointer", fontFamily:"inherit" }}>{it.emoji || "🍽️"} {it.name} · {(Number(String(it.price).replace(",", "."))||0).toFixed(2)}€</button>
+              )))}
+            </div>
+            <div style={{ display:"flex", gap:8 }}>
+              <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === "Enter" && submitText()} placeholder="Dites/écrivez votre commande…" style={{ ...I, flex:1 }} />
+              <button onClick={submitText} style={{ padding:"0 16px", borderRadius:12, background:R, color:"#fff", border:"none", fontWeight:800, cursor:"pointer" }}>↑</button>
+            </div>
+            <PrimaryBtn lg full onClick={finish}>✅ Terminer & envoyer en cuisine</PrimaryBtn>
+          </>)}
+
+          {phase === "done" && (<>
+            <div style={{ background:`${V}14`, border:`1px solid ${V}55`, borderRadius:14, padding:16, textAlign:"center", fontSize:14, color:V, fontWeight:700 }}>✅ Commande transmise en cuisine !</div>
+            <PrimaryBtn lg full onClick={() => go("dashboard")}>🍳 Voir en cuisine →</PrimaryBtn>
+            <GhostBtn full onClick={startCall}>📞 Refaire un appel</GhostBtn>
+          </>)}
+        </>)}
       </div>
     </div>
   );
