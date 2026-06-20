@@ -92,8 +92,26 @@ const SUMUP_LINK = "https://pay.sumup.com/b2c/REMPLACE-MOI";
 // (carte SumUp / mode test), repasser cette constante à `true`.
 const PAIEMENT_CARTE_ACTIF = false;
 
+// ⚠️ MODE TEST ABONNEMENT : tant que c'est `true`, le bouton « Payer avec SumUp »
+// active l'abonnement GRATUITEMENT (30 jours, plan Premium) SANS SumUp ni fonction
+// serveur — pour pouvoir tester toute l'app (dont l'assistant vocal Premium).
+// Repasser à `false` quand le vrai paiement SumUp d'abonnement sera branché.
+const ABONNEMENT_TEST = true;
+
 // Lance le paiement : crée un checkout SumUp côté serveur puis redirige le client
 async function payerAbonnement() {
+  if (ABONNEMENT_TEST) {
+    try {
+      const { data: { user: au } } = await supabase.auth.getUser();
+      if (!au) { alert("Connectez-vous d'abord, puis réessayez."); return; }
+      const fin = new Date(Date.now() + 30 * 86400000).toISOString();
+      const { error } = await supabase.from("comptes").update({ abonnement_fin: fin, plan: "premium", prix: 0 }).eq("id", au.id);
+      if (error) { alert("Activation test impossible : " + error.message); return; }
+      alert("✅ Abonnement activé en mode TEST : 30 jours, plan Premium, sans paiement. La page va se recharger.");
+      window.location.reload();
+    } catch (e) { alert("Erreur activation test : " + (e?.message || String(e))); }
+    return;
+  }
   try {
     const { data, error } = await supabase.functions.invoke("creer-paiement", { body: {} });
     if (error) {
