@@ -1105,6 +1105,10 @@ function Admin({ user, go, onLogout, orders = [], openGuide }) {
             <div style={{ fontSize:13, fontWeight:700, marginBottom:4 }}>💳 Paiement de la commande</div>
             <Toggle label="Proposer le paiement par carte" sub="Le client paie directement ici, sans quitter le chat" value={cfg.payEnLigne !== false} onChange={v => setCfg(c => ({ ...c, payEnLigne:v }))} accent={V} />
             <p style={{ fontSize:11.5, color:"#6B6378", lineHeight:1.6, marginTop:6 }}>Après sa commande, le client choisit « 💳 payer par carte ici » (formulaire sécurisé intégré, il ne quitte pas AdBarth) ou « 🏪 payer au restaurant ». Le statut s'affiche sur le ticket en cuisine. ⚙️ L'encaissement réel par carte nécessite la fonction serveur <span style={{ fontFamily:"monospace", color:"#A89FB0" }}>creer-paiement-commande</span> reliée à votre compte SumUp (voir PAIEMENT_ADBARTH.md) ; tant qu'elle n'est pas configurée, le client est invité à régler au restaurant.</p>
+            <div style={{ marginTop:14, paddingTop:14, borderTop:"1px solid #241D2F" }}>
+              <Toggle label="🧪 Mode test paiement (simulation)" sub="Simule un paiement accepté SANS SumUp et SANS encaisser — pour tester tout le parcours" value={cfg.payTest === true} onChange={v => setCfg(c => ({ ...c, payTest:v }))} accent={"#F59E0B"} />
+              {cfg.payTest === true && <p style={{ fontSize:11.5, color:"#F59E0B", lineHeight:1.6, marginTop:6, fontWeight:600 }}>⚠️ Mode test ACTIVÉ : « Payer par carte » valide la carte puis confirme la commande sans aucun encaissement réel. À DÉSACTIVER avant la mise en production avec de vrais clients.</p>}
+            </div>
           </Card>
           <Card>
             <div style={{ fontSize:13, fontWeight:700, marginBottom:4, display:"flex", alignItems:"center", gap:8 }}>📞 Assistant vocal téléphonique <span style={{ fontSize:10, fontWeight:800, color:"#0B0910", background:`linear-gradient(135deg,${R},${OR})`, borderRadius:20, padding:"2px 9px", letterSpacing:.5 }}>PREMIUM</span></div>
@@ -1666,6 +1670,17 @@ function Chatbot({ go, user, restoId, isPublic }) {
     if (!/^\d{3,4}$/.test(card.cvc)) { setPayErr("Cryptogramme (CVC) invalide — 3 chiffres au dos."); return; }
     if (sanitizeText(card.name, 60).length < 2) { setPayErr("Indiquez le nom du titulaire de la carte."); return; }
     const total = cartTotal; const cmdRef = "CMD-" + uid();
+    // 🧪 MODE TEST (bac à sable) : on simule un paiement accepté SANS contacter
+    // SumUp ni encaisser le moindre euro. Sert à tester tout le parcours.
+    if (cfg?.payTest === true) {
+      setPaying(true);
+      setTimeout(() => {
+        setPaying(false);
+        setCard({ num:"", exp:"", cvc:"", name:"" });
+        recordOrder(cmdRef, "🧪 Paiement simulé (mode test — aucun encaissement) ✓");
+      }, 800);
+      return;
+    }
     setPaying(true);
     try {
       const { data, error } = await supabase.functions.invoke("creer-paiement-commande", {
