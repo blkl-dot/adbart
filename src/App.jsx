@@ -80,7 +80,7 @@ function validPrice(v) {
 const PLANS = [
   { key:"starter", name:"Starter", price:29.90, features:["SMS automatique sur appel manqué","Lien de commande envoyé par SMS","Chatbot commande + réservation","Dashboard cuisine temps réel","Jusqu'à 100 SMS/mois"], missing:["SMS illimités","Installation faite par un technicien"] },
   { key:"pro", name:"Pro", price:49.90, popular:true, features:["SMS automatique sur appel manqué","Lien de commande envoyé par SMS","Chatbot commande + réservation","Dashboard cuisine temps réel","SMS illimités"], missing:["Installation faite par un technicien"] },
-  { key:"premium", name:"Premium", price:79.90, features:["SMS automatique sur appel manqué","Lien de commande envoyé par SMS","Chatbot commande + réservation","Dashboard cuisine temps réel","SMS illimités","Installation faite par un technicien (panel admin configuré pour vous)"], missing:[] },
+  { key:"premium", name:"Premium", price:79.90, features:["SMS automatique sur appel manqué","Lien de commande envoyé par SMS","Chatbot commande + réservation","Dashboard cuisine temps réel","SMS illimités","📞 Standard téléphonique IA : un assistant vocal répond aux appels et prend la commande","Installation faite par un technicien (panel admin configuré pour vous)"], missing:[] },
 ];
 
 // ⚠️ Lien de secours (si les fonctions serveur ne sont pas encore déployées)
@@ -1105,6 +1105,22 @@ function Admin({ user, go, onLogout, orders = [], openGuide }) {
             <div style={{ fontSize:13, fontWeight:700, marginBottom:4 }}>💳 Paiement de la commande</div>
             <Toggle label="Proposer le paiement par carte" sub="Le client paie directement ici, sans quitter le chat" value={cfg.payEnLigne !== false} onChange={v => setCfg(c => ({ ...c, payEnLigne:v }))} accent={V} />
             <p style={{ fontSize:11.5, color:"#6B6378", lineHeight:1.6, marginTop:6 }}>Après sa commande, le client choisit « 💳 payer par carte ici » (formulaire sécurisé intégré, il ne quitte pas AdBarth) ou « 🏪 payer au restaurant ». Le statut s'affiche sur le ticket en cuisine. ⚙️ L'encaissement réel par carte nécessite la fonction serveur <span style={{ fontFamily:"monospace", color:"#A89FB0" }}>creer-paiement-commande</span> reliée à votre compte SumUp (voir PAIEMENT_ADBARTH.md) ; tant qu'elle n'est pas configurée, le client est invité à régler au restaurant.</p>
+          </Card>
+          <Card>
+            <div style={{ fontSize:13, fontWeight:700, marginBottom:4, display:"flex", alignItems:"center", gap:8 }}>📞 Assistant vocal téléphonique <span style={{ fontSize:10, fontWeight:800, color:"#0B0910", background:`linear-gradient(135deg,${R},${OR})`, borderRadius:20, padding:"2px 9px", letterSpacing:.5 }}>PREMIUM</span></div>
+            {user?.plan === "premium" ? <>
+              <Toggle label="Activer la prise de commande par téléphone (IA)" sub="Le client APPELLE, une IA vocale répond, présente la carte et prend la commande → elle tombe en cuisine" value={cfg.assistantVocal === true} onChange={v => setCfg(c => ({ ...c, assistantVocal:v }))} accent={V} />
+              {cfg.assistantVocal === true && (
+                <div style={{ marginTop:12 }}>
+                  <Field l="Numéro de téléphone vocal (fourni par Twilio)">
+                    <input value={cfg.numeroVocal || ""} onChange={e => setCfg(c => ({ ...c, numeroVocal: e.target.value }))} placeholder="ex: +33 9 70 XX XX XX" maxLength={20} style={I} />
+                  </Field>
+                  <p style={{ fontSize:11.5, color:"#6B6378", lineHeight:1.6, marginTop:6 }}>C'est le numéro que vos clients appelleront. ⚙️ La mise en service (numéro Twilio + branchement de la fonction <span style={{ fontFamily:"monospace", color:"#A89FB0" }}>assistant-vocal</span>) est réalisée par notre équipe — voir ASSISTANT_VOCAL_ADBARTH.md. Une fois le numéro renseigné ici, l'IA répond aux appels 24h/24, en français, avec votre vraie carte.</p>
+                </div>
+              )}
+            </> : (
+              <p style={{ fontSize:12.5, color:"#A89FB0", lineHeight:1.7, marginTop:6 }}>Disponible avec l'abonnement <strong style={{ color:R }}>Premium</strong> : un <strong style={{ color:TXT }}>standard téléphonique IA</strong> répond à vos appels, présente votre carte et prend la commande à voix haute — directement en cuisine, sans que vous décrochiez.</p>
+            )}
           </Card>
           <SaveBtn saved={saved} onClick={save} accent={accent} />
         </>}
