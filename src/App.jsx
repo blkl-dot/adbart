@@ -174,6 +174,49 @@ function restoSlug(name, id) {
 }
 const isUuid = s => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(s || ""));
 
+// ── Carte bancaire : utilitaires pour le paiement DIRECT sur AdBarth ───
+// Vérifie un numéro de carte par l'algorithme de Luhn (clé de contrôle).
+function luhnValid(num) {
+  const s = String(num || "").replace(/\D/g, "");
+  if (s.length < 13 || s.length > 19) return false;
+  let sum = 0, alt = false;
+  for (let i = s.length - 1; i >= 0; i--) {
+    let d = +s[i];
+    if (alt) { d *= 2; if (d > 9) d -= 9; }
+    sum += d; alt = !alt;
+  }
+  return sum % 10 === 0;
+}
+// Détecte la marque (pour l'icône) à partir des premiers chiffres.
+function cardBrand(num) {
+  const s = String(num || "").replace(/\D/g, "");
+  if (/^4/.test(s)) return { name: "Visa", icon: "💳" };
+  if (/^(5[1-5]|2[2-7])/.test(s)) return { name: "Mastercard", icon: "💳" };
+  if (/^3[47]/.test(s)) return { name: "Amex", icon: "💳" };
+  return { name: "", icon: "💳" };
+}
+// Formate « 4242424242424242 » → « 4242 4242 4242 4242 » au fil de la frappe.
+function formatCardNumber(v) {
+  const s = String(v || "").replace(/\D/g, "").slice(0, 19);
+  return s.replace(/(.{4})/g, "$1 ").trim();
+}
+// Formate « 1226 » → « 12/26 ».
+function formatExpiry(v) {
+  const s = String(v || "").replace(/\D/g, "").slice(0, 4);
+  return s.length >= 3 ? s.slice(0, 2) + "/" + s.slice(2) : s;
+}
+// Vérifie MM/AA : mois 01-12, et pas déjà expirée. Renvoie {month,year} ou null.
+function validExpiry(v) {
+  const m = String(v || "").match(/^(\d{2})\s*\/\s*(\d{2})$/);
+  if (!m) return null;
+  const mois = +m[1], an = 2000 + +m[2];
+  if (mois < 1 || mois > 12) return null;
+  const now = new Date();
+  const fin = new Date(an, mois, 0, 23, 59, 59); // dernier jour du mois d'expiration
+  if (fin < now) return null;
+  return { month: m[1], year: String(an) };
+}
+
 // ── CSS global ────────────────────────────────────────────────────────
 const CSS = `
 @import url('https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800;900&family=DM+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap');
@@ -1060,8 +1103,8 @@ function Admin({ user, go, onLogout, orders = [], openGuide }) {
           </Card>
           <Card>
             <div style={{ fontSize:13, fontWeight:700, marginBottom:4 }}>💳 Paiement de la commande</div>
-            <Toggle label="Proposer le paiement en ligne" sub="Sinon, le client règle uniquement au restaurant" value={cfg.payEnLigne !== false} onChange={v => setCfg(c => ({ ...c, payEnLigne:v }))} accent={V} />
-            <p style={{ fontSize:11.5, color:"#6B6378", lineHeight:1.6, marginTop:6 }}>Le client choisit « payer en ligne » ou « payer au restaurant » après sa commande. Le statut s'affiche sur le ticket en cuisine. ⚙️ L'encaissement en ligne par carte nécessite la fonction serveur <span style={{ fontFamily:"monospace", color:"#A89FB0" }}>creer-paiement-commande</span> (voir PAIEMENT_ADBARTH.md) ; sans elle, le client est invité à régler au restaurant.</p>
+            <Toggle label="Proposer le paiement par carte" sub="Le client paie directement ici, sans quitter le chat" value={cfg.payEnLigne !== false} onChange={v => setCfg(c => ({ ...c, payEnLigne:v }))} accent={V} />
+            <p style={{ fontSize:11.5, color:"#6B6378", lineHeight:1.6, marginTop:6 }}>Après sa commande, le client choisit « 💳 payer par carte ici » (formulaire sécurisé intégré, il ne quitte pas AdBarth) ou « 🏪 payer au restaurant ». Le statut s'affiche sur le ticket en cuisine. ⚙️ L'encaissement réel par carte nécessite la fonction serveur <span style={{ fontFamily:"monospace", color:"#A89FB0" }}>creer-paiement-commande</span> reliée à votre compte SumUp (voir PAIEMENT_ADBARTH.md) ; tant qu'elle n'est pas configurée, le client est invité à régler au restaurant.</p>
           </Card>
           <SaveBtn saved={saved} onClick={save} accent={accent} />
         </>}
@@ -1198,6 +1241,10 @@ function Chatbot({ go, user, restoId, isPublic }) {
   const [msgs, setMsgs] = useState([]);
   const [input, setInput] = useState("");
   const [done, setDone] = useState(false);
+  // Paiement par carte DIRECTEMENT sur AdBarth (sans quitter le site)
+  const [card, setCard] = useState({ num:"", exp:"", cvc:"", name:"" });
+  const [paying, setPaying] = useState(false);
+  const [payErr, setPayErr] = useState("");
   const ref = useRef(null);
   // Personnalisation d'un plat (« sans cornichon », « bien cuit »…)
   const [customizing, setCustomizing] = useState(null); // l'article en cours de personnalisation
@@ -1289,7 +1336,8 @@ function Chatbot({ go, user, restoId, isPublic }) {
     intent: ["🍔 Commander", "📅 Réserver une table", "❓ Infos & horaires"],
     resv_confirm: ["✅ Confirmer", "✏️ Modifier"],
     order_confirm: ["✅ Confirmer", "✏️ Modifier"],
-    order_pay: ["💳 Payer en ligne", "🏪 Payer au restaurant"],
+    order_pay: ["💳 Payer par carte ici", "🏪 Payer au restaurant"],
+    order_card: ["🏪 Plutôt payer au restaurant"],
     faq: ["Horaires ?", "Livraison ?", "Allergènes ?", "↩ Retour"],
   };
 
@@ -1462,10 +1510,15 @@ function Chatbot({ go, user, restoId, isPublic }) {
 
     // ── Choix du paiement ──
     if (flow === "order_pay") {
-      if (/\b(ligne|carte|\bcb\b|internet|maintenant|appli|\bapp\b|tout de suite|paypal|en ligne)/.test(t) || t.includes("💳")) { payerCommandeEnLigne(); return; }
+      if (/\b(ligne|carte|\bcb\b|internet|maintenant|appli|\bapp\b|tout de suite|paypal|en ligne)/.test(t) || t.includes("💳")) { openCardForm(); return; }
       if (/\b(resto|restau|restaurant|sur ?place|place|espece|liquide|cash|comptoir|caisse|arriv|recup|plus tard|au resto)/.test(t) || t.includes("🏪")) { confirmOrder(); return; }
       if (isNo(t)) { setFlow("order_items"); bot("Pas de souci, ajustez votre commande 👇", 300); return; }
-      bot("Comment réglez-vous ? 💳 en ligne, ou 🏪 au restaurant ?", 350); return;
+      bot("Comment réglez-vous ? 💳 par carte ici, ou 🏪 au restaurant ?", 350); return;
+    }
+    // ── Saisie de la carte (le client peut aussi taper « au restaurant » pour basculer) ──
+    if (flow === "order_card") {
+      if (/\b(resto|restau|restaurant|sur ?place|place|espece|liquide|cash|comptoir|caisse|au resto|annul|plus tard)/.test(t) || t.includes("🏪")) { confirmOrder(); return; }
+      bot("Renseignez votre carte dans le formulaire sécurisé ci-dessus 👆, ou touchez « 🏪 Payer au restaurant ».", 300); return;
     }
 
     // ── Réservation : étapes ──
@@ -1581,17 +1634,47 @@ function Chatbot({ go, user, restoId, isPublic }) {
     bot(`🎉 Commande confirmée !\n\n${items.join("\n")}\n\n💰 Total : ${cartTotal.toFixed(2)}€\n\n${payNote}\n\nMerci ! 🙏`, 400);
     setCart([]);
   }
-  // Paiement EN LIGNE : crée un encaissement côté serveur (SumUp) puis redirige.
-  // Si la fonction n'est pas (encore) déployée, on bascule proprement sur « au restaurant ».
-  async function payerCommandeEnLigne() {
-    const total = cartTotal; const ref = "CMD-" + uid();
+  // Ouvre le formulaire de carte DIRECTEMENT dans le chat (le client ne quitte pas AdBarth).
+  function openCardForm() {
+    setPayErr(""); setCard({ num:"", exp:"", cvc:"", name:"" }); setFlow("order_card");
+    bot(`Réglez votre commande de ${cartTotal.toFixed(2)}€ par carte, ici même 🔒\nVos informations sont chiffrées et transmises directement à notre prestataire de paiement.`, 250);
+  }
+  // Paiement par carte SUR AdBarth : on encaisse d'abord (SumUp côté serveur), et on
+  // n'enregistre la commande en cuisine QU'EN CAS DE SUCCÈS (pas de ticket impayé).
+  async function payerCarteSurPlace() {
+    setPayErr("");
+    const num = card.num.replace(/\s/g, "");
+    if (!luhnValid(num)) { setPayErr("Numéro de carte invalide — vérifiez les chiffres."); return; }
+    const exp = validExpiry(card.exp);
+    if (!exp) { setPayErr("Date d'expiration invalide (format MM/AA, non expirée)."); return; }
+    if (!/^\d{3,4}$/.test(card.cvc)) { setPayErr("Cryptogramme (CVC) invalide — 3 chiffres au dos."); return; }
+    if (sanitizeText(card.name, 60).length < 2) { setPayErr("Indiquez le nom du titulaire de la carte."); return; }
+    const total = cartTotal; const cmdRef = "CMD-" + uid();
+    setPaying(true);
     try {
       const { data, error } = await supabase.functions.invoke("creer-paiement-commande", {
-        body: { montant: Math.round(total * 100), ref, resto: restoId, total: total.toFixed(2) },
+        body: {
+          mode: "card", montant: Math.round(total * 100), ref: cmdRef,
+          resto: restoId, total: total.toFixed(2),
+          card: { number: num, expiry_month: exp.month, expiry_year: exp.year, cvv: card.cvc, name: sanitizeText(card.name, 60) },
+        },
       });
-      if (!error && data?.url) { recordOrder(ref, "💳 Paiement en ligne"); window.location.href = data.url; return; }
-    } catch (e) {}
-    bot("Le paiement en ligne n'est pas encore activé pour ce restaurant 🙏\nVotre commande peut être réglée au restaurant : touchez « 🏪 Payer au restaurant ».", 400);
+      setPaying(false);
+      // Encaissement réussi → on enregistre la commande, payée.
+      if (!error && (data?.status === "PAID" || data?.status === "SUCCESSFUL")) {
+        setCard({ num:"", exp:"", cvc:"", name:"" });
+        recordOrder(cmdRef, "💳 Payé en ligne par carte ✓"); return;
+      }
+      // Le serveur préfère une page hébergée (3-D Secure) → on y redirige proprement.
+      if (!error && data?.url) { recordOrder(cmdRef, "💳 Paiement en ligne"); window.location.href = data.url; return; }
+      // Échec : message clair, la carte reste saisie pour réessayer.
+      let msg = data?.error || (error?.message) || "Le paiement n'a pas abouti.";
+      if (/non configur|secrets|501/i.test(String(msg))) msg = "Le paiement par carte n'est pas encore activé pour ce restaurant.";
+      setPayErr(msg + " Vous pouvez réessayer ou régler au restaurant.");
+    } catch (e) {
+      setPaying(false);
+      setPayErr("Paiement indisponible pour l'instant — vous pouvez régler au restaurant 🏪.");
+    }
   }
   function confirmOrder() { recordOrder("CMD-" + uid(), "🏪 À régler au restaurant"); }
   function confirmResv() {
@@ -1667,6 +1750,46 @@ function Chatbot({ go, user, restoId, isPublic }) {
                 <button type="button" onClick={confirmCustom} style={{ flex:1, padding:"12px", borderRadius:12, background:`${V}18`, color:V, border:`1px solid ${V}55`, fontWeight:800, fontSize:13.5, cursor:"pointer", fontFamily:"inherit" }}>👍 Complet</button>
               )}
               <button type="button" onClick={confirmCustom} style={{ flex:2, padding:"12px", borderRadius:12, background:R, color:"#fff", border:"none", fontWeight:800, fontSize:14, cursor:"pointer", fontFamily:"inherit" }}>Ajouter au panier →</button>
+            </div>
+          </div>
+        )}
+
+        {/* Paiement par carte — DIRECTEMENT sur AdBarth, sans quitter le site */}
+        {flow === "order_card" && (
+          <div className="fu" style={{ background:`linear-gradient(165deg, #1d1626, ${PANEL})`, border:`1.5px solid ${V}55`, borderRadius:16, padding:"16px", boxShadow:`0 18px 44px -26px ${V}77` }}>
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12 }}>
+              <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                <span style={{ fontSize:18 }}>{cardBrand(card.num).icon}</span>
+                <span style={{ fontSize:14, fontWeight:800, color:"#fff" }}>Paiement sécurisé</span>
+                {cardBrand(card.num).name && <span style={{ fontSize:11, color:V, fontWeight:700, background:`${V}1A`, border:`1px solid ${V}44`, borderRadius:8, padding:"2px 7px" }}>{cardBrand(card.num).name}</span>}
+              </div>
+              <span style={{ fontSize:15, fontWeight:900, color:OR }}>{cartTotal.toFixed(2)}€</span>
+            </div>
+            <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+              <div>
+                <div style={{ fontSize:11, fontWeight:700, color:MUT, marginBottom:5 }}>Numéro de carte</div>
+                <input inputMode="numeric" autoComplete="cc-number" value={card.num} onChange={e => setCard(c => ({ ...c, num: formatCardNumber(e.target.value) }))} placeholder="1234 5678 9012 3456" style={{ ...I, fontFamily:"'Space Mono', monospace", letterSpacing:1 }} />
+              </div>
+              <div style={{ display:"flex", gap:10 }}>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:11, fontWeight:700, color:MUT, marginBottom:5 }}>Expiration</div>
+                  <input inputMode="numeric" autoComplete="cc-exp" value={card.exp} onChange={e => setCard(c => ({ ...c, exp: formatExpiry(e.target.value) }))} placeholder="MM/AA" maxLength={5} style={{ ...I, fontFamily:"'Space Mono', monospace" }} />
+                </div>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:11, fontWeight:700, color:MUT, marginBottom:5 }}>CVC</div>
+                  <input inputMode="numeric" autoComplete="cc-csc" value={card.cvc} onChange={e => setCard(c => ({ ...c, cvc: e.target.value.replace(/\D/g, "").slice(0, 4) }))} placeholder="123" maxLength={4} style={{ ...I, fontFamily:"'Space Mono', monospace" }} />
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize:11, fontWeight:700, color:MUT, marginBottom:5 }}>Nom du titulaire</div>
+                <input autoComplete="cc-name" value={card.name} onChange={e => setCard(c => ({ ...c, name: e.target.value.slice(0, 60) }))} onKeyDown={e => e.key === "Enter" && !paying && payerCarteSurPlace()} placeholder="JEAN DUPONT" style={{ ...I, textTransform:"uppercase" }} />
+              </div>
+              {payErr && <div style={{ color:"#EF4444", fontSize:12.5, lineHeight:1.5, background:"#EF444412", border:"1px solid #EF444433", borderRadius:10, padding:"9px 11px" }}>{payErr}</div>}
+              <button type="button" onClick={payerCarteSurPlace} disabled={paying} className="sheen" style={{ width:"100%", padding:"14px", borderRadius:12, background: paying ? "#34293F" : `linear-gradient(135deg, ${V}, #1fae84)`, color:"#fff", border:"none", fontWeight:800, fontSize:15, cursor: paying ? "not-allowed" : "pointer", fontFamily:"inherit", display:"flex", alignItems:"center", justifyContent:"center", gap:8, boxShadow: paying ? "none" : `0 12px 28px -12px ${V}99` }}>
+                {paying ? <><Spinner /> Paiement…</> : <>🔒 Payer {cartTotal.toFixed(2)}€</>}
+              </button>
+              <button type="button" onClick={confirmOrder} disabled={paying} style={{ width:"100%", padding:"10px", borderRadius:11, background:"transparent", color:MUT, border:`1px solid ${LINE2}`, fontWeight:700, fontSize:13, cursor: paying ? "not-allowed" : "pointer", fontFamily:"inherit" }}>🏪 Plutôt payer au restaurant</button>
+              <p style={{ fontSize:10.5, color:FAINT, textAlign:"center", lineHeight:1.5, display:"flex", alignItems:"center", justifyContent:"center", gap:5 }}><span>🔒</span> Paiement chiffré — vos coordonnées bancaires ne sont jamais stockées par le restaurant.</p>
             </div>
           </div>
         )}
@@ -1817,11 +1940,18 @@ function OrderCard({ o, i }) {
   function upd(s) { setStatus(s); db.upd(o.id, s); }
   const isPret = status === "pret";
   const isCmd = o.type === "commande";
+  // Payé en ligne (carte) vs à régler au restaurant — repère visuel pour la cuisine
+  const paidOnline = isCmd && /pay[ée]\s+en\s+ligne|paiement\s+en\s+ligne/i.test(o.note || "");
+  const atResto = isCmd && /au\s+restaurant/i.test(o.note || "");
   return (
     <div className="fu" style={{ background:PANEL, border:`1.5px solid ${isPret ? V+"66" : isCmd ? R+"55" : "#3B82F655"}`, borderRadius:20, overflow:"hidden", boxShadow: isPret ? `0 0 0 1px ${V}22, 0 14px 34px -22px ${V}66` : `0 14px 34px -24px #000`, height:"100%", display:"flex", flexDirection:"column" }}>
       <div style={{ background: isPret ? `${V}1A` : isCmd ? `${R}14` : "#3B82F614", padding:"14px 18px", display:"flex", alignItems:"center", justifyContent:"space-between", borderBottom:`1px solid ${LINE}` }}>
         <div style={{ display:"flex", alignItems:"center", gap:12 }}><span style={{ fontSize:26 }}>{isCmd ? "🍔" : "📅"}</span><div><div style={{ fontFamily:"'Space Mono',monospace", fontWeight:700, fontSize:18, color:"#fff", letterSpacing:"-.5px" }}>{o.id}</div><div style={{ fontSize:12, color:MUT, marginTop:2 }}>{o.client} · {o.time}</div></div></div>
-        <div style={{ fontSize:11, fontWeight:800, padding:"5px 13px", borderRadius:20, background: isPret ? `${V}28` : `${R}1A`, border:`1px solid ${isPret ? V+"66" : R+"45"}`, color: isPret ? V : R, textTransform:"uppercase", letterSpacing:.5 }}>{isPret ? "✓ Prêt" : "En cours"}</div>
+        <div style={{ display:"flex", alignItems:"center", gap:7 }}>
+          {paidOnline && <span style={{ fontSize:10.5, fontWeight:800, padding:"4px 10px", borderRadius:20, background:`${V}22`, border:`1px solid ${V}66`, color:V, letterSpacing:.4 }}>💳 PAYÉ</span>}
+          {atResto && <span style={{ fontSize:10.5, fontWeight:800, padding:"4px 10px", borderRadius:20, background:`${OR}1A`, border:`1px solid ${OR}55`, color:OR, letterSpacing:.4 }}>🏪 À ENCAISSER</span>}
+          <div style={{ fontSize:11, fontWeight:800, padding:"5px 13px", borderRadius:20, background: isPret ? `${V}28` : `${R}1A`, border:`1px solid ${isPret ? V+"66" : R+"45"}`, color: isPret ? V : R, textTransform:"uppercase", letterSpacing:.5 }}>{isPret ? "✓ Prêt" : "En cours"}</div>
+        </div>
       </div>
       <div style={{ padding:"14px 18px", display:"flex", flexDirection:"column", gap:8, flex:1 }}>
         {o.items.map((it, j) => (<div key={j} style={{ display:"flex", alignItems:"center", gap:10, fontSize:16, fontWeight:600, color:TXT, lineHeight:1.35 }}><span style={{ color:R, fontSize:13, flexShrink:0 }}>▸</span>{it}</div>))}
