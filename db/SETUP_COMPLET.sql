@@ -126,6 +126,7 @@ create policy commandes_public_insert on public.commandes for insert to anon
 
 -- 4) VITRINE PUBLIQUE ---------------------------------------------------------
 -- Le chatbot/assistant client (anonyme) lit le resto via cette vue, jamais la table.
+drop view if exists public.public_restaurants;
 create or replace view public.public_restaurants
 with (security_invoker = false) as
   select id, resto, menu, cats,
