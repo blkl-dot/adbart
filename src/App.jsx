@@ -86,6 +86,12 @@ const PLANS = [
 // ⚠️ Lien de secours (si les fonctions serveur ne sont pas encore déployées)
 const SUMUP_LINK = "https://pay.sumup.com/b2c/REMPLACE-MOI";
 
+// ⚠️ PAIEMENT PAR CARTE TEMPORAIREMENT DÉSACTIVÉ.
+// Tant que c'est `false` : aucun choix de paiement, aucun formulaire carte —
+// le client passe commande et règle au restaurant. Pour réactiver le paiement
+// (carte SumUp / mode test), repasser cette constante à `true`.
+const PAIEMENT_CARTE_ACTIF = false;
+
 // Lance le paiement : crée un checkout SumUp côté serveur puis redirige le client
 async function payerAbonnement() {
   try {
@@ -1103,6 +1109,7 @@ function Admin({ user, go, onLogout, orders = [], openGuide }) {
               <Toggle label="❓ Réponses automatiques aux questions" value={true} accent={V} />
             </div>
           </Card>
+          {PAIEMENT_CARTE_ACTIF ? (
           <Card>
             <div style={{ fontSize:13, fontWeight:700, marginBottom:4 }}>💳 Paiement de la commande</div>
             <Toggle label="Proposer le paiement par carte" sub="Le client paie directement ici, sans quitter le chat" value={cfg.payEnLigne !== false} onChange={v => setCfg(c => ({ ...c, payEnLigne:v }))} accent={V} />
@@ -1112,6 +1119,12 @@ function Admin({ user, go, onLogout, orders = [], openGuide }) {
               {cfg.payTest === true && <p style={{ fontSize:11.5, color:"#F59E0B", lineHeight:1.6, marginTop:6, fontWeight:600 }}>⚠️ Mode test ACTIVÉ : « Payer par carte » valide la carte puis confirme la commande sans aucun encaissement réel. À DÉSACTIVER avant la mise en production avec de vrais clients.</p>}
             </div>
           </Card>
+          ) : (
+          <Card>
+            <div style={{ fontSize:13, fontWeight:700, marginBottom:4 }}>💳 Paiement de la commande</div>
+            <p style={{ fontSize:12.5, color:"#A89FB0", lineHeight:1.7, marginTop:4 }}>Le paiement en ligne est <strong style={{ color:"#F59E0B" }}>temporairement désactivé</strong>. Les clients passent commande et <strong style={{ color:TXT }}>règlent au restaurant</strong>. Le paiement par carte sera réactivé plus tard.</p>
+          </Card>
+          )}
           <Card>
             <div style={{ fontSize:13, fontWeight:700, marginBottom:4, display:"flex", alignItems:"center", gap:8 }}>📞 Assistant vocal téléphonique <span style={{ fontSize:10, fontWeight:800, color:"#0B0910", background:`linear-gradient(135deg,${R},${OR})`, borderRadius:20, padding:"2px 9px", letterSpacing:.5 }}>PREMIUM</span></div>
             {user?.plan === "premium" ? <>
@@ -1648,7 +1661,7 @@ function Chatbot({ go, user, restoId, isPublic }) {
     if (/\b(livr|domicile|deliveroo|uber)/.test(t)) return "🛵 Pas de livraison pour l'instant — mais la commande à emporter est dispo ici !";
     if (/\b(emport|sur place|take ?away|click and collect|a recuperer|a recup)/.test(t)) return "🥡 C'est à emporter : commandez ici, puis venez récupérer 👍";
     if (/\b(allerg|gluten|vegan|vegetar|halal|porc|lactose|noix|arachide)/.test(t)) return "⚠️ Pour une allergie ou un régime, indiquez-le dans la commande (option « sans » ou demande libre) — on en tient compte.";
-    if (/\b(paie|paye|payer|paiement|carte|espece|\bcb\b|ticket ?resto|liquide|sumup)/.test(t)) return cfg?.payEnLigne !== false ? "💳 Comme vous préférez : payez en ligne à la fin de la commande, ou réglez au restaurant 🙂" : "💳 Le paiement se fait au restaurant, au moment de récupérer la commande.";
+    if (/\b(paie|paye|payer|paiement|carte|espece|\bcb\b|ticket ?resto|liquide|sumup)/.test(t)) return (PAIEMENT_CARTE_ACTIF && cfg?.payEnLigne !== false) ? "💳 Comme vous préférez : payez en ligne à la fin de la commande, ou réglez au restaurant 🙂" : "💳 Le paiement se fait au restaurant, au moment de récupérer la commande.";
     if (/\b(prix|tarif|combien|cout)/.test(t) || /\bcher\b/.test(t)) { const it = findMenuItem(t); if (it) return `💶 Le ${it.name} est à ${priceNum(it.price).toFixed(2)}€.`; return "💶 Tous les prix sont indiqués sur le menu, par catégorie 👇"; }
     return null;
   }
@@ -1692,7 +1705,7 @@ function Chatbot({ go, user, restoId, isPublic }) {
     // ── Confirmation de commande ──
     if (flow === "order_confirm") {
       if (isYes(t)) {
-        if (cfg?.payEnLigne !== false) { setFlow("order_pay"); bot("Parfait ! 🎉 Comment souhaitez-vous régler ?\n\n💳 Payer en ligne maintenant\n🏪 Payer au restaurant", 350); }
+        if (PAIEMENT_CARTE_ACTIF && cfg?.payEnLigne !== false) { setFlow("order_pay"); bot("Parfait ! 🎉 Comment souhaitez-vous régler ?\n\n💳 Payer en ligne maintenant\n🏪 Payer au restaurant", 350); }
         else { confirmOrder(); }
         return;
       }
